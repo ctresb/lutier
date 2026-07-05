@@ -1,0 +1,11 @@
+# "vila do moinho" - aconchego de vilarejo: kalimba, flauta, harpa, swing leve.
+import "presets/keys.synth"
+import "presets/bass.synth"
+import "presets/drums.synth"
+import "presets/orchestra.synth"
+
+master {
+  bus_gain -1db
+  compressor(threshold: -18db, ratio: 2, attack: 15ms, release: 180ms, makeup: auto)
+  limiter(ceiling: -1db, lookahead: 5ms, release: 60ms)
+}

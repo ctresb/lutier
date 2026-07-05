@@ -1,0 +1,41 @@
+# lutier presets - graves
+
+# Sub sinusoidal com corpo de saw. Fundação de qualquer faixa. Sempre mono.
+synth subbass {
+  mono glide 60ms legato
+  gain -6db
+
+  voice {
+    let raw = sine(freq: note - 12st, gain: 0.8) + saw(freq: note, gain: 0.25)
+    let amp = adsr(attack: 60ms, decay: 300ms, sustain: 0.8, release: 400ms)
+    out lowpass(raw, cutoff: 300hz, q: 0.2) * amp * velocity
+  }
+}
+
+# Baixo saturado com envelope de filtro. Groove, ação, eletrônico.
+synth bass_deep {
+  mono glide 25ms legato
+  gain -6db
+
+  param drv: scalar = 0.3 range 0..0.9
+
+  voice {
+    let raw = saw(freq: note, gain: 0.6) + sine(freq: note - 12st, gain: 0.7)
+    let hot = saturate(raw, amount: drv)
+    let amp  = adsr(attack: 3ms, decay: 140ms, sustain: 0.55, release: 80ms)
+    let fenv = adsr(attack: 2ms, decay: 160ms, sustain: 0.25, release: 70ms)
+    out lowpass(hot, cutoff: 320hz + fenv * 1200hz, q: 0.3) * amp * velocity
+  }
+}
+
+# Baixo pulse staccato. Chiptune, corrida, tensão rítmica.
+synth bass_pulse {
+  mono glide 10ms
+  gain -8db
+
+  voice {
+    let osc = pulse(freq: note, width: 25%, gain: 0.6)
+    let amp = adsr(attack: 2ms, decay: 120ms, sustain: 0.3, release: 60ms)
+    out lowpass(osc, cutoff: 900hz, q: 0.4) * amp * velocity
+  }
+}

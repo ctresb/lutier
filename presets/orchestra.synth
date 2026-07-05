@@ -1,0 +1,96 @@
+# lutier presets - seção orquestral (complementa pads.synth: strings_warm, choir_vox)
+
+# Cordas staccato rítmicas (ostinatos de ação, Sturm und Drang).
+synth strings_stacc {
+  poly 12 steal oldest spread 60%
+  gain -9db
+
+  voice {
+    let osc = saw(freq: note, unison: 5, spread: 10ct, width: 0.6, gain: 0.45)
+    let amp = env { 0 -> 1 in 8ms curve lin -> 0.4 in 120ms curve exp -> 0 in 120ms curve exp }
+    out lowpass(osc, cutoff: 2.8khz, q: 0.25) * amp * velocity
+  }
+
+  bus {
+    reverb(size: 0.7, decay: 1.6s, damp: 4khz, mix: 18%)
+  }
+}
+
+# Stab de metais: ataque forte, corpo curto. Pontuação heroica.
+synth brass_stab {
+  poly 8 steal oldest spread 40%
+  gain -7db
+
+  voice {
+    let osc = saw(freq: note, unison: 3, spread: 8ct, width: 0.4, gain: 0.5)
+            + saw(freq: note - 12st, gain: 0.25)
+    let bite = env { 0 -> 1 in 25ms curve log -> 0.5 in 200ms curve exp }
+    let amp = adsr(attack: 15ms, decay: 250ms, sustain: 0.5, release: 200ms)
+    out lowpass(saturate(osc, amount: 0.35), cutoff: 900hz + bite * 2200hz, q: 0.3) * amp * velocity
+  }
+
+  bus {
+    widen(amount: 25%)
+    reverb(size: 0.75, decay: 1.8s, damp: 3.5khz, mix: 16%)
+  }
+}
+
+# Trompa sustentada: quintas nobres, colchão de metais.
+synth horn_sustain {
+  poly 6 steal oldest spread 30%
+  gain -9db
+
+  voice {
+    let osc = saw(freq: note, gain: 0.35) + triangle(freq: note, gain: 0.3)
+    let swell = adsr(attack: 300ms, decay: 400ms, sustain: 0.8, release: 600ms)
+    out lowpass(saturate(osc, amount: 0.25), cutoff: 1.4khz, q: 0.2) * swell * velocity
+  }
+
+  bus {
+    reverb(size: 0.85, decay: 2.5s, damp: 3khz, mix: 22%)
+  }
+}
+
+# Flauta: sine + sopro + vibrato que entra atrasado.
+synth flute_lead {
+  poly 3 steal oldest
+  gain -8db
+
+  mod {
+    vib: lfo(shape: sine, rate: 5hz, amount: 1) * env { 0 -> 0 in 350ms curve lin -> 1 in 400ms curve log }
+    vib * 0.15 -> voice.pitch
+  }
+
+  voice {
+    let body = sine(freq: note, gain: 0.55) + triangle(freq: note + 12st, gain: 0.08)
+    let breath = bandpass(noise(color: pink, gain: 0.25), cutoff: hz(note) * 2, q: 0.7)
+    let amp = adsr(attack: 60ms, decay: 150ms, sustain: 0.85, release: 300ms)
+    out (body + breath) * amp * velocity
+  }
+
+  bus {
+    reverb(size: 0.8, decay: 2.2s, damp: 5khz, mix: 24%)
+  }
+}
+
+# Órgão de igreja: drawbars aditivos (16'+8'+4'+2⅔'+2'). Sacro, gótico.
+synth organ_church {
+  poly 10 steal oldest
+  gain -11db
+
+  voice {
+    let pipes = sine(freq: note - 12st, gain: 0.5)
+              + sine(freq: note,        gain: 0.6)
+              + sine(freq: note + 12st, gain: 0.35)
+              + sine(freq: note + 19st, gain: 0.2)
+              + sine(freq: note + 24st, gain: 0.12)
+    let air = bandpass(noise(color: pink, gain: 0.06), cutoff: hz(note) * 1, q: 0.6)
+    let amp = adsr(attack: 40ms, decay: 100ms, sustain: 0.95, release: 500ms)
+    out (pipes + air) * amp * velocity
+  }
+
+  bus {
+    chorus(voices: 2, depth: 20%, rate: 0.6hz, mix: 20%)
+    reverb(size: 1.0, decay: 6s, damp: 3khz, predelay: 50ms, mix: 40%)
+  }
+}

@@ -1,0 +1,171 @@
+# "vila do moinho" - Sol maior @ 104bpm, swing 56, forma A/B/A (96 beats ~55s)
+# I-V-vi-IV com melodia pergunta/resposta na kalimba; flauta responde na seção B.
+tempo 104
+
+track kal kalimba
+swing 56
+humanize 8ms 10%
+track fl flute_lead
+humanize 10ms 8%
+track hp harp
+humanize 7ms 8%
+track ep epiano_fm
+track sb subbass
+track shk shaker
+swing 56
+track ht hat_closed
+swing 56
+
+# ---------------- A: manhã na vila ----------------
+section manha 32
+track ep epiano_fm
+0  [g3 b3 d4] 4 0.5 x2 @16
+4  [d3 f#3 a3] 4 0.45 x2 @16
+8  [e3 g3 b3] 4 0.5 x2 @16
+12 [c3 e3 g3] 4 0.45 x2 @16
+track sb subbass
+0  g1 3.5 0.6 x2 @16
+4  d2 3.5 0.55 x2 @16
+8  e2 3.5 0.6 x2 @16
+12 c2 3.5 0.55 x2 @16
+track kal kalimba
+# pergunta
+0    b4 0.5 0.75
+1    d5 0.5 0.7
+2    g4 1   0.75
+3.5  a4 0.5 0.65
+4    b4 0.5 0.7
+5    a4 0.5 0.65
+6    f#4 1.5 0.7
+# resposta
+8    b4 0.5 0.75
+9    d5 0.5 0.7
+10   e5 1   0.78
+11.5 d5 0.5 0.68
+12   c5 0.5 0.7
+13   b4 0.5 0.65
+14   g4 2   0.75
+# repete variada
+16   b4 0.5 0.72
+17   d5 0.5 0.68
+18   g4 1   0.72
+19.5 a4 0.5 0.62
+20   b4 0.5 0.68
+21   c5 0.5 0.66
+22   a4 1.5 0.68
+24   g4 0.5 0.72
+25   b4 0.5 0.68
+26   d5 1   0.75
+27.5 e5 0.5 0.68
+28   d5 0.5 0.68
+29   b4 0.5 0.64
+30   g4 2   0.72
+track shk shaker
+0.5 c5 0.15 0.5 x32 @1
+track ht hat_closed
+0 c5 0.1 0.35 x16 @2
+
+# ---------------- B: a flauta do moleiro ----------------
+section moinho 32
+track ep epiano_fm
+0  [c3 e3 g3] 4 0.5 x2 @16
+4  [g3 b3 d4] 4 0.45 x2 @16
+8  [a3 c4 e4] 4 0.5 x2 @16
+12 [d3 f#3 a3] 4 0.45 x2 @16
+track sb subbass
+0  c2 3.5 0.6 x2 @16
+4  g1 3.5 0.55 x2 @16
+8  a1 3.5 0.6 x2 @16
+12 d2 3.5 0.55 x2 @16
+track fl flute_lead
+0    e5 1.5 0.7
+2    d5 1   0.65
+3    c5 0.5 0.6
+4    b4 1.5 0.68
+6    d5 1   0.65
+8    c5 1.5 0.7
+10   b4 1   0.64
+11   a4 0.5 0.6
+12   a4 1   0.62
+13   f#4 1  0.62
+14   d4 2   0.68
+16   e5 1.5 0.72
+18   d5 1   0.66
+19   c5 0.5 0.62
+20   b4 1.5 0.7
+22   g5 1   0.72
+24   f#5 1  0.72
+25   e5 0.5 0.66
+26   d5 1.5 0.7
+28   c5 0.5 0.62
+29   b4 0.5 0.62
+30   a4 2   0.66
+track hp harp
+0  c4 0.5 0.5 x8 @4
+1  e4 0.5 0.45 x8 @4
+2  g4 0.5 0.5 x8 @4
+3  e4 0.5 0.42 x8 @4
+track kal kalimba
+8    e5 0.5 0.5
+9    c5 0.5 0.45
+24   d5 0.5 0.5
+25   b4 0.5 0.45
+track shk shaker
+0.5 c5 0.15 0.5 x32 @1
+
+# ---------------- A': entardecer (mais cheio, termina em casa) ----------------
+section entardecer 32
+track ep epiano_fm
+0  [g3 b3 d4] 4 0.55 x2 @16
+4  [d3 f#3 a3] 4 0.5 x2 @16
+8  [e3 g3 b3] 4 0.55 x2 @16
+12 [c3 e3 g3] 4 0.5 x2 @16
+track sb subbass
+0  g1 3.5 0.65 x2 @16
+4  d2 3.5 0.6 x2 @16
+8  e2 3.5 0.65 x2 @16
+12 c2 3.5 0.6 x2 @16
+track kal kalimba
+0    b4 0.5 0.78
+1    d5 0.5 0.72
+2    g4 1   0.78
+3.5  a4 0.5 0.66
+4    b4 0.5 0.72
+5    a4 0.5 0.66
+6    f#4 1.5 0.72
+8    b4 0.5 0.78
+9    d5 0.5 0.72
+10   e5 1   0.8
+11.5 d5 0.5 0.7
+12   c5 0.5 0.72
+13   b4 0.5 0.66
+14   g4 2   0.78
+16   g4 0.5 0.74
+17   b4 0.5 0.7
+18   d5 1   0.78
+19.5 e5 0.5 0.7
+20   d5 0.5 0.7
+21   b4 0.5 0.66
+22   a4 1.5 0.7
+24   g4 4   0.78
+track fl flute_lead
+16   b5 1.5 0.6
+18   a5 1   0.55
+20   g5 3   0.62
+24   g5 1 0.5
+25   d5 1 0.48
+26   b4 4 0.55
+track hp harp
+24   g3 0.5 0.55
+24.5 b3 0.5 0.5
+25   d4 0.5 0.55
+25.5 g4 0.5 0.5
+26   b4 0.5 0.55
+26.5 d5 0.5 0.5
+27   g5 3 0.6
+track shk shaker
+0.5 c5 0.15 0.5 x24 @1
+track ht hat_closed
+0 c5 0.1 0.35 x12 @2
+
+arrange manha moinho entardecer

@@ -1,0 +1,93 @@
+# lutier presets - pads e camadas sustentadas
+# uso: import "presets/pads.synth" e referencie o nome na track.
+
+# Cordas sinfônicas quentes. Melancolia, épico, cinemática.
+# param cutoff automatizável (500 escuro -> 4500 aberto).
+synth strings_warm {
+  poly 12 steal oldest spread 70%
+  gain -10db
+
+  param cutoff: hz = 900 range 100..8000 smooth 20ms curve log
+
+  global {
+    let breath = lfo(shape: sine, rate: 16beat, amount: 0.12)
+  }
+
+  voice {
+    let osc = saw(freq: note, unison: 7, spread: 14ct, width: 0.8, gain: 0.4)
+            + saw(freq: note - 12st, unison: 3, spread: 8ct, width: 0.4, gain: 0.18)
+    let amp = adsr(attack: 1.8s, decay: 600ms, sustain: 0.85, release: 3.5s)
+    let tone = lowpass(osc, cutoff: cutoff, q: 0.25, slope: 24db)
+    out tone * amp * velocity * (1 + breath)
+  }
+
+  bus {
+    chorus(voices: 4, depth: 35%, rate: 0.3hz, mix: 30%)
+    widen(amount: 45%)
+    reverb(size: 0.95, decay: 5s, damp: 3.5khz, predelay: 30ms, mix: 32%)
+  }
+}
+
+# Coro sintético (wavetable de formantes vocais). Sacro, etéreo, boss themes.
+# param morph: 0 = "ah" escuro, 1 = "uh" fechado.
+synth choir_vox {
+  poly 8 steal oldest spread 40%
+  gain -13db
+
+  param morph: scalar = 0.3 range 0..1
+
+  voice {
+    let vox = wavetable(freq: note, table: "vox", pos: morph, gain: 0.6)
+            + wavetable(freq: note + 0.07st, table: "vox", pos: morph + 0.1, gain: 0.4)
+    let amp = adsr(attack: 2.5s, decay: 800ms, sustain: 0.8, release: 4s)
+    out lowpass(vox, cutoff: 2.2khz, q: 0.2) * amp * velocity
+  }
+
+  bus {
+    reverb(size: 0.9, decay: 6s, damp: 3khz, predelay: 40ms, mix: 38%)
+  }
+}
+
+# Pad escuro e ameaçador. Tensão, dungeon, stealth.
+synth pad_dark {
+  poly 8 steal oldest spread 50%
+  gain -11db
+
+  param cutoff: hz = 500 range 100..3000 smooth 25ms curve log
+
+  global {
+    let unrest = lfo(shape: sine, rate: 12beat, amount: 120)
+  }
+
+  voice {
+    let osc = saw(freq: note, unison: 5, spread: 18ct, width: 0.7, gain: 0.4)
+            + pulse(freq: note - 12st, width: 30%, gain: 0.2)
+    let amp = adsr(attack: 1.2s, decay: 500ms, sustain: 0.8, release: 3s)
+    out lowpass(osc, cutoff: cutoff + unrest * 1hz, q: 0.45) * amp * velocity
+  }
+
+  bus {
+    widen(amount: 30%)
+    reverb(size: 0.9, decay: 4.5s, damp: 2.5khz, mix: 28%)
+  }
+}
+
+# Pad de vidro: wavetable digital, brilhante e frágil. Gelo, magia, menus.
+synth pad_glass {
+  poly 8 steal oldest spread 60%
+  gain -13db
+
+  param morph: scalar = 0.4 range 0..1
+
+  voice {
+    let osc = wavetable(freq: note, table: "digital", pos: morph, gain: 0.4)
+            + sine(freq: note + 12st, gain: 0.12)
+    let amp = adsr(attack: 1.5s, decay: 700ms, sustain: 0.75, release: 3s)
+    out highpass(osc, cutoff: 300hz, q: 0.2) * amp * velocity
+  }
+
+  bus {
+    chorus(voices: 3, depth: 30%, rate: 0.5hz, mix: 30%)
+    reverb(size: 0.85, decay: 4s, damp: 6khz, mix: 30%)
+  }
+}

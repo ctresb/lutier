@@ -1,0 +1,353 @@
+# infortunata
+# Ré menor. Forma: abertura ff (lento) -> ostinato pp -> crescendo -> tutti ff -> coda.
+# Compasso ternário: harmonia muda a cada 3 beats. Pedal de ré por toda a peça.
+tempo 56
+tempo 18 140
+
+track str strings_warm
+automate cutoff 0 3000 -> 19 2800 -> 22 500 curve exp -> 114 1400 curve log -> 162 4200 curve log -> 226 4000
+
+track cho choir_vox
+track mel choir_lead
+humanize 6ms 6%
+track brass lead_saw
+automate cutoff 114 900 -> 162 3500 curve log -> 230 3200
+track pulse bass_pulse
+track sub subbass
+track timp taiko
+track gg gong
+
+# ================= ABERTURA - "O Fortuna / velut luna" ff, declamado =================
+section abertura 18
+track str strings_warm
+0  [d2 d3 f3 a3 d4 f4] 6 1.0
+6  [c2 c3 e3 g3 c4 e4] 6 0.95
+12 [d2 d3 f3 a3 d4 f4] 6 1.0
+track cho choir_vox
+0  [d4 f4 a4 d5] 6 0.95
+6  [c4 e4 g4 c5] 6 0.9
+12 [d4 f4 a4 d5] 6 0.95
+track mel choir_lead
+0    a4 2   0.95
+2    a4 1   0.9
+3    g4 1   0.9
+4    a4 2   0.92
+6    a4 1   0.9
+7    g4 1   0.85
+8    f4 1   0.85
+9    g4 1   0.85
+10   e4 2   0.85
+12   f4 1   0.85
+13   e4 1   0.85
+14   d4 4   0.9
+track sub subbass
+0  d2 6 0.85
+6  c2 6 0.8
+12 d2 6 0.85
+track timp taiko
+0  d2 1 0.95
+6  d2 1 0.9
+12 d2 1 0.95
+track gg gong
+0 d3 6 1.0
+12 d3 6 0.9
+track brass lead_saw
+0  [d3 a3 d4] 6 0.9
+6  [c3 g3 c4] 6 0.85
+12 [d3 a3 d4] 6 0.9
+track pulse bass_pulse
+0  d2 0.5 0.7 x3 @6
+
+# ================= SUSSURRO - ostinato pp "Semper crescis aut decrescis" =================
+section sussurro 96
+track pulse bass_pulse
+0 d3 0.35 0.16 x96 @1
+track timp taiko
+0 d2 1 0.2 x32 @3
+track sub subbass
+0 d2 12 0.22 x8 @12
+track str strings_warm
+0 [d3 f3 a3] 3 0.14 x8 @12
+3 [d3 f3 a3] 3 0.13 x8 @12
+6 [c3 e3 g3] 3 0.14 x8 @12
+9 [d3 f3 a3] 3 0.13 x8 @12
+track mel choir_lead
+# frase A - patamar de ré (12-24)
+12 d4 1 0.22
+13 d4 1 0.20
+14 d4 1 0.22
+15 d4 1 0.20
+16 e4 1 0.22
+17 f4 1 0.22
+18 e4 1 0.21
+19 d4 1 0.20
+20 e4 1 0.21
+21 d4 3 0.22
+# frase B - patamar de fá (24-36)
+24 f4 1 0.24
+25 f4 1 0.22
+26 f4 1 0.24
+27 f4 1 0.22
+28 g4 1 0.24
+29 a4 1 0.25
+30 g4 1 0.24
+31 f4 1 0.22
+32 g4 1 0.24
+33 f4 3 0.25
+# frase A repete (36-48)
+36 d4 1 0.22
+37 d4 1 0.21
+38 d4 1 0.22
+39 d4 1 0.21
+40 e4 1 0.22
+41 f4 1 0.23
+42 e4 1 0.22
+43 d4 1 0.21
+44 e4 1 0.22
+45 d4 3 0.23
+# frase B repete (48-60)
+48 f4 1 0.25
+49 f4 1 0.24
+50 f4 1 0.25
+51 f4 1 0.24
+52 g4 1 0.25
+53 a4 1 0.26
+54 g4 1 0.25
+55 f4 1 0.24
+56 g4 1 0.25
+57 f4 3 0.26
+# frase C - patamar de lá, tensão sobe (60-72)
+60 a4 1 0.27
+61 a4 1 0.26
+62 a4 1 0.27
+63 a4 1 0.26
+64 g4 1 0.27
+65 f4 1 0.27
+66 g4 1 0.27
+67 a4 1 0.29
+68 g4 1 0.27
+69 f4 3 0.29
+# frase C' (72-84)
+72 a4 1 0.29
+73 a4 1 0.27
+74 a4 1 0.29
+75 a4 1 0.27
+76 g4 1 0.29
+77 f4 1 0.29
+78 g4 1 0.29
+79 a4 1 0.30
+80 g4 1 0.29
+81 f4 3 0.30
+# cadência descendente (84-96)
+84 g4 1 0.30
+85 f4 1 0.29
+86 e4 1 0.29
+87 f4 1 0.29
+88 e4 1 0.27
+89 d4 1 0.27
+90 e4 1 0.29
+91 e4 1 0.27
+92 d4 4 0.30
+
+# ================= CRESCENDO - "Sors salutis", vozes somam =================
+section crescendo 48
+track pulse bass_pulse
+0 d3 0.35 0.5 x48 @1
+track timp taiko
+0 d2 1 0.6 x16 @3
+track sub subbass
+0 d2 12 0.6 x4 @12
+track str strings_warm
+0 [d3 f3 a3 d4] 3 0.5 x4 @12
+3 [d3 f3 a3] 3 0.45 x4 @12
+6 [c3 e3 g3 c4] 3 0.5 x4 @12
+9 [d3 f3 a3] 3 0.45 x4 @12
+track cho choir_vox
+0 [d4 f4] 12 0.4 x4 @12
+track mel choir_lead
+# frase A mf (0-12)
+0  d4 1 0.55
+1  d4 1 0.52
+2  d4 1 0.55
+3  d4 1 0.52
+4  e4 1 0.55
+5  f4 1 0.57
+6  e4 1 0.54
+7  d4 1 0.52
+8  e4 1 0.55
+9  d4 3 0.58
+# frase B mf (12-24)
+12 f4 1 0.6
+13 f4 1 0.57
+14 f4 1 0.6
+15 f4 1 0.57
+16 g4 1 0.6
+17 a4 1 0.63
+18 g4 1 0.6
+19 f4 1 0.57
+20 g4 1 0.6
+21 f4 3 0.63
+# frase C f (24-36)
+24 a4 1 0.68
+25 a4 1 0.65
+26 a4 1 0.68
+27 a4 1 0.65
+28 g4 1 0.68
+29 f4 1 0.68
+30 g4 1 0.7
+31 a4 1 0.72
+32 g4 1 0.7
+33 f4 3 0.72
+# cadência f (36-48)
+36 g4 1 0.72
+37 f4 1 0.7
+38 e4 1 0.7
+39 f4 1 0.72
+40 e4 1 0.7
+41 d4 1 0.7
+42 e4 1 0.72
+43 e4 1 0.7
+44 d4 4 0.75
+track brass lead_saw
+24 a3 1 0.4
+25 a3 1 0.38
+26 a3 1 0.4
+27 a3 1 0.38
+28 g3 1 0.4
+29 f3 1 0.4
+30 g3 1 0.42
+31 a3 1 0.44
+32 g3 1 0.42
+33 f3 3 0.45
+36 g3 1 0.45
+38 e3 1 0.42
+40 e3 1 0.42
+42 e3 1 0.44
+44 d3 4 0.48
+
+# ================= FINAL - tutti fortissimo, melodia na oitava =================
+section final 48
+track pulse bass_pulse
+0 d3 0.35 0.7 x48 @1
+track timp taiko
+0 d2 1 0.95 x16 @3
+1.5 d2 0.8 0.5 x16 @3
+track sub subbass
+0 d2 12 0.85 x4 @12
+track gg gong
+0 d3 4 0.9
+24 d3 4 0.85
+track str strings_warm
+0 [d3 f3 a3 d4 f4] 3 0.85 x2 @12
+3 [d3 f3 a3 d4] 3 0.8 x2 @12
+6 [c3 e3 g3 c4 e4] 3 0.85 x2 @12
+9 [d3 f3 a3 d4] 3 0.8 x2 @12
+24 [f3 a3 c4 f4] 3 0.85
+27 [f3 a3 c4] 3 0.8
+30 [c4 e4 g4] 3 0.85
+33 [f3 a3 c4] 3 0.8
+36 [g3 a#3 d4 g4] 3 0.88
+39 [g3 a#3 d4] 3 0.85
+42 [a3 c#4 e4 a4] 3 0.9
+45 [a3 c#4 e4] 3 0.88
+track cho choir_vox
+0 [d4 f4 a4] 12 0.6 x2 @12
+24 [f4 a4 c5] 12 0.6
+36 [g4 a#4 d5] 6 0.65
+42 [a4 c#5 e5] 6 0.7
+track mel choir_lead
+# frase A ff oitava acima (0-12)
+0  d5 1 0.9
+1  d5 1 0.85
+2  d5 1 0.9
+3  d5 1 0.85
+4  e5 1 0.9
+5  f5 1 0.92
+6  e5 1 0.88
+7  d5 1 0.85
+8  e5 1 0.88
+9  d5 3 0.92
+# frase B ff (12-24)
+12 f5 1 0.92
+13 f5 1 0.88
+14 f5 1 0.92
+15 f5 1 0.88
+16 g5 1 0.92
+17 a5 1 0.95
+18 g5 1 0.9
+19 f5 1 0.88
+20 g5 1 0.9
+21 f5 3 0.95
+# frase C - clímax absoluto (24-36)
+24 a5 1 0.95
+25 a5 1 0.9
+26 a5 1 0.95
+27 a5 1 0.9
+28 g5 1 0.92
+29 f5 1 0.92
+30 g5 1 0.95
+31 a5 1 0.97
+32 g5 1 0.95
+33 f5 3 0.95
+# cadência final subindo com a harmonia (36-48)
+36 g5 1 0.95
+37 f5 1 0.92
+38 d5 1 0.9
+39 g5 1 0.95
+40 f5 1 0.92
+41 d5 1 0.9
+42 e5 1 0.95
+43 c#5 1 0.95
+44 e5 4 0.97
+track brass lead_saw
+0  d4 1 0.6
+2  d4 1 0.6
+4  e4 1 0.62
+5  f4 1 0.65
+8  e4 1 0.62
+9  d4 3 0.65
+12 f4 1 0.65
+16 g4 1 0.68
+17 a4 1 0.7
+21 f4 3 0.7
+24 a4 1 0.72
+28 g4 1 0.72
+31 a4 1 0.75
+33 f4 3 0.72
+36 g4 1 0.75
+39 g4 1 0.75
+42 e4 1 0.78
+44 e4 4 0.8
+
+# ================= CODA - golpes martelados, ré menor final =================
+section coda 22
+track str strings_warm
+0 [g3 a#3 d4 g4] 3 0.92
+3 [a3 c#4 e4 a4] 3 0.95
+6 [d3 a3 d4 f4 a4 d5] 14 1.0
+track cho choir_vox
+0 [g4 a#4 d5] 3 0.7
+3 [a4 c#5 e5] 3 0.75
+6 [d4 f4 a4 d5] 14 0.8
+track mel choir_lead
+0 g5 3 0.95
+3 a5 3 0.97
+6 d5 12 0.97
+track brass lead_saw
+0 g4 3 0.8
+3 a4 3 0.82
+6 d4 12 0.85
+track sub subbass
+0 g1 3 0.85
+3 a1 3 0.88
+6 d2 14 0.95
+track timp taiko
+0 d2 1 0.95
+3 d2 1 0.95
+6 d2 1 1.0
+6 d2 0.25 0.55 x20 @0.25
+11 d2 1 0.9
+track gg gong
+6 d3 12 1.0
+
+arrange abertura sussurro crescendo final coda

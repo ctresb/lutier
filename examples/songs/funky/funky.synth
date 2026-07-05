@@ -1,0 +1,101 @@
+# funky
+
+synth grave_kick {
+  poly 2 steal oldest
+  gain -1db
+
+  voice {
+    let pitch_drop = env {
+      160hz -> 55hz in 25ms curve exp
+            -> 38hz in 160ms curve lin
+    }
+
+    let amp = env {
+      1.0 -> 0.8 in 90ms curve exp
+          -> 0.0 in 260ms curve exp
+    }
+
+    let body = sine(freq: pitch_drop)
+    let punch = highpass(noise(gain: 0.25), cutoff: 2.5khz, q: 0.3)
+              * env { 1 -> 0 in 8ms curve exp }
+
+    out saturate(body * 1.3, amount: 0.35) * amp * velocity + punch * velocity
+  }
+}
+
+synth palma {
+  poly 4 steal oldest
+  gain -8db
+
+  voice {
+    let burst = bandpass(noise(gain: 1), cutoff: 1.6khz, q: 0.7)
+    let amp = env {
+      1 -> 0.3 in 12ms curve exp
+        -> 0.9 in 8ms curve lin
+        -> 0.0 in 120ms curve exp
+    }
+    out burst * amp * velocity
+  }
+
+  bus {
+    reverb(size: 0.4, decay: 0.5s, damp: 6khz, mix: 12%)
+  }
+}
+
+synth chimbal {
+  poly 4 steal oldest
+  gain -16db
+
+  voice {
+    let hiss = highpass(noise(gain: 1), cutoff: 9khz, q: 0.4)
+    let amp = env { 1 -> 0 in 45ms curve exp }
+    out hiss * amp * velocity
+  }
+}
+
+synth sub_grave {
+  mono glide 20ms legato
+  gain -4db
+
+  voice {
+    let raw = sine(freq: note - 12st, gain: 0.9)
+            + square(freq: note, gain: 0.25)
+
+    let hot = saturate(raw, amount: 0.45)
+
+    let amp  = adsr(attack: 3ms, decay: 200ms, sustain: 0.55, release: 70ms)
+    let fenv = adsr(attack: 2ms, decay: 160ms, sustain: 0.15, release: 60ms)
+
+    let tone = lowpass(hot, cutoff: 260hz + fenv * 900hz, q: 0.3)
+
+    out tone * amp * velocity
+  }
+}
+
+synth lead_apito {
+  poly 4 steal oldest
+  gain -12db
+
+  voice {
+    let vib = lfo(shape: sine, rate: 5.5hz, amount: 0.15)
+
+    let osc = square(freq: note + vib * 1st, gain: 0.4)
+            + saw(freq: note, unison: 3, spread: 8ct, width: 0.5, gain: 0.3)
+
+    let amp = adsr(attack: 6ms, decay: 120ms, sustain: 0.5, release: 120ms)
+    let tone = lowpass(osc, cutoff: 2.2khz, q: 0.4)
+
+    out tone * amp * velocity
+  }
+
+  bus {
+    delay_fx(time: 3/8beat, feedback: 35%, mix: 22%, pingpong: true, damp: 5khz)
+    reverb(size: 0.6, decay: 1.2s, damp: 5khz, mix: 14%)
+  }
+}
+
+master {
+  bus_gain -1db
+  compressor(threshold: -16db, ratio: 4, attack: 8ms, release: 100ms, makeup: auto)
+  limiter(ceiling: -0.8db, lookahead: 5ms, release: 50ms)
+}

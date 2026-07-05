@@ -1,0 +1,94 @@
+# lutier presets - percussão (toque qualquer nota; c2/c3 convenção)
+
+# Taiko épico: sine drop + pele de brown noise. Guerra, clímax.
+synth taiko {
+  poly 3 steal oldest
+  gain -4db
+
+  voice {
+    let pd  = env { 90hz -> 45hz in 40ms curve exp -> 36hz in 200ms curve lin }
+    let amp = env { 1.0 -> 0.6 in 120ms curve exp -> 0.0 in 500ms curve exp }
+    let skin = lowpass(noise(color: brown, gain: 1.2), cutoff: 300hz, q: 0.3)
+             * env { 1 -> 0 in 40ms curve exp }
+    out (sine(freq: pd) + skin) * amp * velocity
+  }
+
+  bus {
+    reverb(size: 0.7, decay: 1.8s, damp: 2khz, mix: 15%)
+  }
+}
+
+# Kick eletrônico seco com snap. Groove, eletrônico, ação.
+synth kick_deep {
+  poly 2 steal oldest
+  gain -2db
+
+  voice {
+    let pd = env { 130hz -> 52hz in 30ms curve exp -> 40hz in 130ms curve lin }
+    let amp = env { 1.0 -> 0.7 in 80ms curve exp -> 0.0 in 200ms curve exp }
+    let snap = highpass(noise(gain: 0.15), cutoff: 3khz, q: 0.3)
+             * env { 1 -> 0 in 9ms curve exp }
+    out (sine(freq: pd) + snap) * amp * velocity
+  }
+}
+
+# Caixa: corpo tonal + rajada de noise. Marcha, batalha.
+synth snare {
+  poly 3 steal oldest
+  gain -8db
+
+  voice {
+    let body = sine(freq: 190hz, gain: 0.4) * env { 1 -> 0 in 90ms curve exp }
+    let wire = bandpass(noise(gain: 0.9), cutoff: 4khz, q: 0.2)
+             * env { 1 -> 0 in 140ms curve exp }
+    out (body + wire) * velocity
+  }
+}
+
+# Hat fechado (blue noise = mais "ar"). Ritmo, swing.
+synth hat_closed {
+  poly 4 steal oldest
+  gain -15db
+
+  voice {
+    let hiss = highpass(noise(color: blue, gain: 1), cutoff: 8khz, q: 0.4)
+    let amp = env { 1 -> 0 in 55ms curve exp }
+    out hiss * amp * velocity
+  }
+}
+
+# Hat aberto.
+synth hat_open {
+  poly 2 steal oldest
+  gain -16db
+
+  voice {
+    let hiss = highpass(noise(color: blue, gain: 1), cutoff: 7khz, q: 0.35)
+    let amp = env { 1 -> 0.3 in 80ms curve exp -> 0 in 350ms curve exp }
+    out hiss * amp * velocity
+  }
+}
+
+# Shaker de velvet noise. Textura rítmica sutil.
+synth shaker {
+  poly 4 steal oldest
+  gain -16db
+
+  voice {
+    let grit = bandpass(noise(color: velvet, density: 4000), cutoff: 6khz, q: 0.3)
+    let amp = env { 0 -> 1 in 25ms curve lin -> 0 in 90ms curve exp }
+    out grit * amp * velocity * 3
+  }
+}
+
+# Tom modal grave (membrana física). Ritual, floresta.
+synth tom_modal {
+  poly 4 steal oldest
+  gain -8db
+  kill after 3s
+
+  voice {
+    let hit = modal(freq: note, modes: membrane, strike: 35%, decay: 1.2s)
+    out hit * velocity
+  }
+}

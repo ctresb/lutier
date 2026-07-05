@@ -1,0 +1,358 @@
+# lutier presets - SFX de jogo (one-shots; dispare uma nota e pronto)
+# Convenção: a nota tocada define o pitch base; c5 é o padrão dos exemplos.
+# Importe no seu patch e toque a nota do efeito, ou use examples/sfx/showcase.score.
+
+# Sino de igreja REAL: sintese modal (modal2) com razoes de sino de bronze
+# (hum/prime/tierce menor/quint/nominal/deciem), doublets = batimento "mmm",
+# martelo fisico (velocity controla a dureza do badalo). Toque d4 solene, a5 leve.
+synth sfx_bell_church {
+  poly 4 steal oldest
+  gain -3db
+  kill after 12s
+
+  voice {
+    let parciais = [
+      (0.5,   9s,   0.9),
+      (1.0,   7s,   1.0),
+      (1.183, 5s,   0.8),
+      (1.506, 3.5s, 0.55),
+      (2.0,   2.8s, 0.7),
+      (2.662, 1.6s, 0.4),
+      (3.011, 1.1s, 0.35)
+    ]
+    out modal2(freq: hz(note), modes: parciais, doublet: 0.18%,
+               strike: 0.3, hard: 0.5 + velocity * 0.35) * velocity
+  }
+
+  bus {
+    reverb(size: 0.92, decay: 4.5s, damp: 4khz, mix: 30%)
+  }
+}
+
+# Sininho de item/notificação: curto, brilhante, dobra na 12ª.
+synth sfx_bell_chime {
+  poly 4 steal oldest
+  gain -3db
+  kill after 3s
+
+  voice {
+    let idx  = env { 1 -> 0 in 400ms curve exp }
+    let m    = sine(freq: hz(note) * 3.5, gain: 1)
+    let ping = sine(freq: note, fm: m * idx * 3)
+             + sine(freq: note + 19st, gain: 0.2) * env { 1 -> 0 in 300ms curve exp }
+    out ping * env { 1 -> 0 in 1.2s curve exp } * velocity
+  }
+
+  bus {
+    reverb(size: 0.6, decay: 1.5s, mix: 20%)
+  }
+}
+
+# Moeda (blip duplo estilo arcade). Toque b5.
+synth sfx_coin {
+  poly 4 steal oldest
+  gain -2db
+  kill after 1s
+
+  voice {
+    let step = env { 0hz -> 0hz in 70ms curve lin -> 400hz in 1ms curve lin }
+    let bip = pulse(freq: hz(note) + step * 1, width: 40%, gain: 0.5)
+    out bip * env { 1 -> 0.6 in 70ms curve lin -> 0 in 350ms curve exp } * velocity
+  }
+}
+
+# Power-up: arpejo subindo uma oitava e meia em 400ms.
+synth sfx_powerup {
+  poly 2 steal oldest
+  gain -3db
+  kill after 1.5s
+
+  voice {
+    let rise = env { 0hz -> 800hz in 400ms curve log }
+    let osc = pulse(freq: hz(note) + rise * 1, width: 35%, gain: 0.45)
+    let shimmer = sine(freq: hz(note) * 2 + rise * 2, gain: 0.15)
+    out (osc + shimmer) * env { 1 -> 0.8 in 380ms curve lin -> 0 in 300ms curve exp } * velocity
+  }
+}
+
+# Impacto/hit corpo-a-corpo: thump + crack. Toque c3.
+synth sfx_hit {
+  poly 4 steal oldest
+  gain -2db
+  kill after 1s
+
+  voice {
+    let thump = sine(freq: env { 160hz -> 55hz in 60ms curve exp })
+              * env { 1 -> 0 in 150ms curve exp }
+    let crack = highpass(noise(gain: 0.7), cutoff: 2khz, q: 0.3)
+              * env { 1 -> 0 in 30ms curve exp }
+    out (thump + crack) * velocity
+  }
+}
+
+# Explosão: sub drop + rugido de brown noise com filtro fechando. Toque c2.
+synth sfx_explosion {
+  poly 2 steal oldest
+  gain -9db
+  kill after 4s
+
+  voice {
+    let boom = sine(freq: env { 90hz -> 30hz in 300ms curve exp })
+             * env { 1 -> 0 in 900ms curve exp } * 0.8
+    let roar = lowpass(noise(color: brown, gain: 0.6),
+                       cutoff: env { 6khz -> 200hz in 1.5s curve exp }, q: 0.3)
+             * env { 1 -> 0.4 in 200ms curve exp -> 0 in 2s curve exp }
+    let debris = bandpass(noise(color: crackle, density: 60), cutoff: 2khz, q: 0.4)
+               * env { 0 -> 1 in 150ms curve lin -> 0 in 1.5s curve exp } * 2
+    out (boom + roar + debris) * velocity
+  }
+
+  bus {
+    reverb(size: 0.8, decay: 2s, damp: 2khz, mix: 18%)
+  }
+}
+
+# Laser/tiro: chirp descendente rápido. Toque c6.
+synth sfx_laser {
+  poly 6 steal oldest
+  gain -4db
+  kill after 0.6s
+
+  voice {
+    let drop = env { 1200hz -> 0hz in 180ms curve exp }
+    let zap = square(freq: hz(note) * 0.3 + drop * 1, gain: 0.4)
+    out zap * env { 1 -> 0 in 200ms curve exp } * velocity
+  }
+}
+
+# Pulo: chirp subindo curto. Toque c4.
+synth sfx_jump {
+  poly 4 steal oldest
+  gain -3db
+  kill after 0.5s
+
+  voice {
+    let up = env { 0hz -> 350hz in 120ms curve log }
+    out sine(freq: hz(note) + up * 1, gain: 0.6)
+      * env { 1 -> 0 in 180ms curve exp } * velocity
+  }
+}
+
+# Clique de UI: tick minúsculo e seco.
+synth sfx_ui_click {
+  poly 4 steal oldest
+  gain -2db
+  kill after 0.3s
+
+  voice {
+    let tick = bandpass(noise(gain: 1), cutoff: 3.5khz, q: 0.8)
+             * env { 1 -> 0 in 12ms curve exp }
+    let tone = sine(freq: note, gain: 0.3) * env { 1 -> 0 in 40ms curve exp }
+    out (tick + tone) * velocity
+  }
+}
+
+# Erro/negado de UI: dois tons descendentes ásperos.
+synth sfx_ui_error {
+  poly 2 steal oldest
+  gain -4db
+  kill after 0.8s
+
+  voice {
+    let drop = env { 0st -> 0st in 90ms curve lin -> -3st in 1ms curve lin }
+    let buzz = pulse(freq: note + drop, width: 20%, gain: 0.4)
+    out buzz * env { 1 -> 0.7 in 90ms curve lin -> 0 in 250ms curve exp } * velocity
+  }
+}
+
+# Alarme: dois tons alternando (sirene). Segure a nota pela duração desejada.
+synth sfx_alarm {
+  poly 2 steal oldest
+  gain -5db
+
+  voice {
+    let wob = lfo(shape: square, rate: 2.5hz, amount: 1)
+    let siren = pulse(freq: note + wob * 3st, width: 45%, gain: 0.4)
+    let amp = adsr(attack: 20ms, decay: 50ms, sustain: 0.9, release: 150ms)
+    out lowpass(siren, cutoff: 3khz, q: 0.4) * amp * velocity
+  }
+}
+
+# Whoosh: rajada de vento filtrada (transições, dashes). Toque qualquer nota.
+synth sfx_whoosh {
+  poly 2 steal oldest
+  gain -4db
+  kill after 1.5s
+
+  voice {
+    let sweep = bandpass(noise(color: pink, gain: 2.5),
+                         cutoff: env { 300hz -> 4khz in 350ms curve log -> 500hz in 400ms curve exp },
+                         q: 0.6)
+    out sweep * env { 0 -> 1 in 300ms curve log -> 0 in 500ms curve exp } * velocity
+  }
+}
+
+# Riser: tensão subindo ~2s (pré-drop, sustos). Toque c3.
+synth sfx_riser {
+  poly 2 steal oldest
+  gain -5db
+  kill after 3s
+
+  voice {
+    let climb = env { 0st -> 12st in 2s curve log }
+    let body = saw(freq: note + climb, unison: 5, spread: 20ct, width: 0.8, gain: 0.4)
+    let hiss = highpass(noise(gain: 0.4), cutoff: 5khz, q: 0.3)
+    out (body + hiss * env { 0 -> 1 in 2s curve exp })
+      * env { 0 -> 1 in 2s curve log -> 0 in 200ms curve exp } * velocity
+  }
+
+  bus {
+    widen(amount: 50%)
+  }
+}
+
+# Portal/teleporte: shimmer FM + sweep. Toque c4.
+synth sfx_portal {
+  poly 2 steal oldest
+  gain -5db
+  kill after 2.5s
+
+  voice {
+    let idx = env { 0 -> 6 in 600ms curve log -> 0 in 1s curve exp }
+    let m = sine(freq: hz(note) * 1.414, gain: 1)
+    let shimmer = sine(freq: note + 12st, fm: m * idx)
+                + sine(freq: note + 19st, fm: m * idx * 0.5, gain: 0.4)
+    out shimmer * env { 0 -> 1 in 400ms curve log -> 0 in 1.4s curve exp } * velocity
+  }
+
+  bus {
+    reverb(size: 0.85, decay: 2.5s, mix: 35%)
+  }
+}
+
+# Sino agudo "bleem!": corpo aditivo com batimento (o "mmm"), formante de "ee",
+# decay longo. Toque a5 (padrao) ou e5 pra mais corpo.
+synth sfx_bell_bright {
+  poly 4 steal oldest
+  gain -4db
+  kill after 6s
+
+  voice {
+    # pares desafinados de parciais: batimento lento = o "mmm" do bleemm
+    let p1 = sine(freq: note, gain: 0.55) + sine(freq: note + 0.09st, gain: 0.5)
+    let p2 = sine(freq: note + 12st, gain: 0.3) + sine(freq: note + 12.07st, gain: 0.26)
+    # o "ee": formante forte e sustentado perto de 3khz
+    let ee = sine(freq: note + 21st, gain: 0.34) + sine(freq: note + 21.05st, gain: 0.3)
+    let hi = sine(freq: note + 28st, gain: 0.12) * env { 1 -> 0 in 700ms curve exp }
+    let body = p1 * env { 1 -> 0 in 3.5s curve exp }
+             + p2 * env { 1 -> 0 in 2.6s curve exp }
+             + ee * env { 1 -> 0.35 in 400ms curve exp -> 0 in 2.2s curve exp }
+             + hi
+    # "bl": ataque com 6ms de rampa (nao e um click seco)
+    let strike = bandpass(noise(gain: 0.35), cutoff: hz(note) * 4, q: 0.7)
+               * env { 1 -> 0 in 25ms curve exp }
+    out (body * env { 0 -> 1 in 6ms curve lin } + strike) * velocity
+  }
+
+  bus {
+    reverb(size: 0.7, decay: 2.2s, damp: 6khz, mix: 24%)
+  }
+}
+
+# Pistola 9mm: impulso full-band + corpo de cano 450hz + knock, tudo distorcido JUNTO.
+# rand varia levemente cada disparo. Toque c3.
+synth sfx_gun_pistol {
+  poly 4 steal oldest
+  gain -3db
+  kill after 1s
+
+  voice {
+    # crack: onda de choque coerente (N-wave) com reflexao de chao e ar
+    let crack = nwave(dur: 2.5ms, sharp: 0.92, reflect: 4ms, reflect_gain: 0.45,
+                      air: 9khz, gain: 2)
+    # corpo: ressonancia de cano ~450hz com q alto (o "knock" metalico)
+    let tube = bandpass(noise(gain: 3), cutoff: 430hz + rand * 60hz, q: 0.85)
+             * env { 1 -> 0 in 110ms curve exp }
+    # punch: soco grave rapido
+    let punch = sine(freq: env { 240hz -> 55hz in 18ms curve exp })
+              * env { 1 -> 0 in 70ms curve exp }
+    # cola: drive forte + clip = camadas viram UM evento
+    let glued = clip(drive(crack + tube * 1.4 + punch * 1.2, amount: 0.85), level: 0.9)
+    out glued * env { 1 -> 0 in 350ms curve exp } * velocity
+  }
+
+  bus {
+    reverb(size: 0.45, decay: 600ms, damp: 3.5khz, mix: 10%)
+  }
+}
+
+# Escopeta 12: mais boca, mais grave, mais lenta. Corpo em 250hz, boom largo. Toque c2.
+synth sfx_gun_shotgun {
+  poly 2 steal oldest
+  gain -3db
+  kill after 1.5s
+
+  voice {
+    let crack = nwave(dur: 4ms, sharp: 0.85, reflect: 6ms, reflect_gain: 0.5,
+                      air: 6khz, gain: 1.8)
+    let tube = bandpass(noise(gain: 3.5), cutoff: 240hz + rand * 40hz, q: 0.8)
+             * env { 1 -> 0 in 180ms curve exp }
+    let boom = sine(freq: env { 160hz -> 42hz in 45ms curve exp })
+             * env { 1 -> 0 in 320ms curve exp }
+    let spray = lowpass(noise(gain: 1.5), cutoff: 2khz, q: 0.3)
+              * env { 1 -> 0 in 90ms curve exp }
+    let glued = clip(drive(crack + tube * 1.5 + boom * 1.6 + spray, amount: 0.9), level: 0.9)
+    out glued * env { 1 -> 0 in 500ms curve exp } * velocity
+  }
+
+  bus {
+    reverb(size: 0.6, decay: 1s, damp: 2.5khz, mix: 14%)
+  }
+}
+
+# Fuzil: crack violento + corpo 600hz + eco de campo aberto. Toque c3.
+synth sfx_gun_rifle {
+  poly 3 steal oldest
+  gain -4db
+  kill after 3s
+
+  voice {
+    let crack = nwave(dur: 1.8ms, sharp: 0.96, reflect: 3ms, reflect_gain: 0.4,
+                      air: 11khz, gain: 2.4)
+    let tube = bandpass(noise(gain: 2.5), cutoff: 620hz + rand * 80hz, q: 0.8)
+             * env { 1 -> 0 in 80ms curve exp }
+    let punch = sine(freq: env { 200hz -> 65hz in 15ms curve exp })
+              * env { 1 -> 0 in 55ms curve exp }
+    let glued = clip(drive(crack * 1.3 + tube * 1.3 + punch, amount: 0.9), level: 0.9)
+    out glued * env { 1 -> 0 in 300ms curve exp } * velocity
+  }
+
+  bus {
+    delay_fx(time: 140ms, feedback: 45%, mix: 28%, damp: 1.8khz)
+    reverb(size: 0.9, decay: 2.4s, damp: 2khz, mix: 26%)
+  }
+}
+
+# Pássaro: gorjeio com warble rápido e chirps gateados. Toque a6..d7, notas curtas.
+synth sfx_bird {
+  poly 4 steal oldest
+  gain -6db
+  kill after 2s
+
+  voice {
+    # warble: vibrato largo e rápido (a assinatura do canto)
+    let warble = lfo(shape: sine, rate: 24hz, amount: 1)
+    # chirplets: gate que corta o tom em pios curtos
+    let chirp_gate = unipolar(lfo(shape: square, rate: 9hz, amount: 1))
+    # arco de pitch do pio: sobe rápido e cai
+    let sweep = env { -4st -> 3st in 70ms curve log -> -2st in 120ms curve exp }
+    let tone = sine(freq: note + sweep + warble * 1.5st, gain: 0.55)
+             + sine(freq: note + 12st + warble * 2st, gain: 0.08)
+    let amp = env { 0 -> 1 in 15ms curve lin -> 0.6 in 150ms curve exp -> 0 in 150ms curve exp }
+    out tone * chirp_gate * amp * velocity
+  }
+
+  bus {
+    reverb(size: 0.7, decay: 1.2s, damp: 7khz, mix: 15%)
+  }
+}

@@ -1,0 +1,141 @@
+# "lamento do inverno" - 128 beats @ 72bpm (~107s)
+# Dm - Bb - F - C / clímax: Dm - Bb - Gm - A
+tempo 72
+
+track str strings
+automate cutoff 0 500 -> 64 3800 curve log -> 96 4500 -> 128 600 curve exp
+
+track ch choir
+automate morph 32 0.15 -> 80 0.7 -> 128 0.2
+
+track bl bell
+track hp harp
+humanize 9ms 10%
+track sb subbass
+track tk taiko
+
+# ---------- lamento: só cordas e harpa, frio ----------
+section lamento 32
+track str strings
+0  [d3 f3 a3]   8 0.45
+8  [a#2 d3 f3]  8 0.42
+16 [f2 a2 c3 f3] 8 0.45
+24 [c3 e3 g3]   8 0.42
+track hp harp
+0    d4 1 0.6
+2    a4 1 0.5
+4    f4 1 0.55
+6    e4 1 0.45
+8    d4 1 0.55
+10   f4 1 0.5
+12   a#3 1 0.5
+14   d4 1 0.45
+16   c4 1 0.55
+18   f4 1 0.5
+20   a4 1 0.55
+22   g4 1 0.45
+24   e4 1 0.5
+26   g4 1 0.5
+28   c5 1.5 0.55
+30.5 a4 1.5 0.4
+track sb subbass
+0  d2 7 0.5
+8  a#1 7 0.5
+16 f2 7 0.5
+24 c2 7 0.5
+
+# ---------- ascensão: coro entra, taiko marca, sino chora ----------
+section ascensao 32
+track str strings
+0  [d3 f3 a3 d4]   8 0.6
+8  [a#2 d3 f3 a#3] 8 0.6
+16 [f3 a3 c4]      8 0.62
+24 [c3 e3 g3 c4]   8 0.6
+track ch choir
+0  [d4 a4]  16 0.5
+16 [f4 c5]  16 0.5
+track bl bell
+0    a4 2 0.7
+4    d5 2 0.6
+8    f5 2 0.65
+12   d5 2 0.55
+16   c5 2 0.7
+20   a4 2 0.6
+24   e5 2 0.65
+28   a5 2 0.6
+track hp harp
+0  d4 0.5 0.55 x8 @4
+1  f4 0.5 0.5  x8 @4
+2  a4 0.5 0.55 x8 @4
+3  f4 0.5 0.45 x8 @4
+track sb subbass
+0  d2 7.5 0.7
+8  a#1 7.5 0.7
+16 f2 7.5 0.7
+24 c2 7.5 0.7
+track tk taiko
+0  d2 1 0.85 x8 @4
+2  d2 1 0.5  x8 @4
+
+# ---------- clímax: tudo aberto, Gm -> A pede resolução que não vem ----------
+section climax 32
+track str strings
+0  [d3 f3 a3 d4 f4]    8 0.8
+8  [a#2 d3 f3 a#3 d4]  8 0.8
+16 [g2 a#2 d3 g3 a#3]  8 0.82
+24 [a2 c#3 e3 a3 e4]   8 0.85
+track ch choir
+0  [d4 f4 a4]   8 0.65
+8  [d4 f4 a#4]  8 0.65
+16 [d4 g4 a#4]  8 0.7
+24 [c#4 e4 a4]  8 0.75
+track bl bell
+0    d6 2 0.75
+3    a5 2 0.65
+6    f5 2 0.7
+8    f5 2 0.7
+11   d5 2 0.6
+16   g5 2 0.75
+19   d5 2 0.65
+22   a#4 2 0.6
+24   a5 3 0.85
+28   e5 4 0.7
+track hp harp
+0  d5 0.25 0.6 x16 @2
+0.5 a4 0.25 0.5 x16 @2
+1  f4 0.25 0.55 x16 @2
+1.5 a4 0.25 0.45 x16 @2
+track sb subbass
+0  d2 7.5 0.85
+8  a#1 7.5 0.85
+16 g1 7.5 0.85
+24 a1 7.5 0.9
+track tk taiko
+0  d2 1 0.95 x16 @2
+1  d2 1 0.55 x16 @2
+
+# ---------- cinzas: volta ao frio, termina sem resolver ----------
+section cinzas 32
+track str strings
+0  [d3 f3 a3] 10 0.5
+12 [a#2 d3 f3] 10 0.45
+24 [d3 f3 a3 d4] 8 0.38
+track ch choir
+0 [d4 a4] 24 0.35
+track hp harp
+0    a4 1.5 0.5
+3    f4 1.5 0.45
+6    d4 1.5 0.5
+10   e4 1.5 0.4
+14   d4 2 0.45
+20   a3 3 0.4
+26   d4 4 0.35
+track bl bell
+16 d5 3 0.4
+24 a4 4 0.35
+track sb subbass
+0  d2 10 0.5
+12 a#1 10 0.45
+24 d2 8 0.4
+
+arrange lamento ascensao climax cinzas

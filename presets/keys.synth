@@ -1,0 +1,136 @@
+# lutier presets - teclas, sinos, dedilhados e leads melódicos
+
+# Sino FM inarmônico (ratio 3.01). Melancolia, relógios, neve.
+synth bell_fm {
+  poly 6 steal oldest
+  gain -9db
+  kill after 7s
+
+  voice {
+    let idx  = adsr(attack: 1ms, decay: 900ms, sustain: 0.05, release: 400ms)
+    let m    = sine(freq: hz(note) * 3.01, gain: 1)
+    let tine = sine(freq: note, fm: m * idx * 4)
+    let amp  = adsr(attack: 1ms, decay: 2.2s, sustain: 0.1, release: 900ms)
+    out tine * amp * velocity
+  }
+
+  bus {
+    delay_fx(time: 3/4beat, feedback: 42%, mix: 26%, pingpong: true, damp: 3khz)
+    reverb(size: 0.8, decay: 3.5s, mix: 24%)
+  }
+}
+
+# E-piano FM clássico (ratio 2:1). Baladas, cidades à noite, lo-fi.
+synth epiano_fm {
+  poly 8 steal oldest
+  gain -7db
+
+  voice {
+    let idx  = adsr(attack: 2ms, decay: 350ms, sustain: 0.15, release: 150ms)
+    let m    = sine(freq: hz(note) * 2, gain: 1)
+    let bell = sine(freq: note, fm: m * idx * 5)
+    let amp  = adsr(attack: 1ms, decay: 600ms, sustain: 0.35, release: 250ms)
+    out bell * amp * velocity
+  }
+
+  bus {
+    delay_fx(time: 3/8beat, feedback: 30%, mix: 18%, pingpong: true, damp: 3khz)
+    reverb(size: 0.5, decay: 1.5s, mix: 12%)
+  }
+}
+
+# Harpa (Karplus-Strong). Arpejos, fantasia, vilarejos.
+synth harp {
+  poly 8 steal quietest
+  gain -8db
+  kill after 5s
+
+  voice {
+    let string = pluck(freq: note, damp: 0.35, decay: 3s, position: 22%)
+    out lowpass(string, cutoff: 3khz, q: 0.15) * velocity
+  }
+
+  bus {
+    reverb(size: 0.85, decay: 3s, damp: 4khz, mix: 22%)
+  }
+}
+
+# Kalimba com vibrato de mod matrix. Aconchego, aldeias, puzzles.
+synth kalimba {
+  poly 6 steal quietest
+  gain -6db
+  kill after 4s
+
+  mod {
+    vib: lfo(shape: sine, rate: 5.2hz, amount: 1)
+    vib * 0.12 -> voice.pitch
+    velocity -> tone.cutoff range 800..4000
+  }
+
+  voice {
+    let string = pluck(freq: note, damp: 0.4, decay: 2.2s, position: 30%)
+    let tone = lowpass(string, cutoff: 0hz, q: 0.2)
+    out tone * velocity
+  }
+
+  bus {
+    delay_fx(time: 3/8beat, feedback: 35%, mix: 22%, pingpong: true, damp: 4khz)
+  }
+}
+
+# Caixinha de música: sine + parcial 4x curto. Ninar, memórias, creepy se em menor.
+synth music_box {
+  poly 8 steal oldest
+  gain -10db
+  kill after 4s
+
+  voice {
+    let body = sine(freq: note + 12st, gain: 0.6)
+             + sine(freq: hz(note) * 8, gain: 0.12) * env { 1 -> 0 in 120ms curve exp }
+    let amp = env { 1 -> 0.25 in 300ms curve exp -> 0 in 1.8s curve exp }
+    out body * amp * velocity
+  }
+
+  bus {
+    reverb(size: 0.7, decay: 2.5s, damp: 5khz, mix: 25%)
+  }
+}
+
+# Sino modal (ressonadores físicos). Templos, magia, impactos cerimoniais.
+synth bell_modal {
+  poly 4 steal oldest
+  gain -10db
+  kill after 6s
+
+  voice {
+    let hit = modal(freq: note, modes: bell, strike: 40%, decay: 3.5s)
+    out hit * velocity
+  }
+
+  bus {
+    reverb(size: 0.7, decay: 2s, mix: 25%)
+  }
+}
+
+# Lead saw cortante com vibrato atrasável por automação. Ação, heroísmo.
+synth lead_saw {
+  mono glide 30ms legato
+  gain -8db
+
+  param cutoff: hz = 2500 range 300..8000 smooth 12ms curve log
+
+  mod {
+    vib: lfo(shape: sine, rate: 5.5hz, amount: 1)
+    vib * 0.18 -> voice.pitch
+  }
+
+  voice {
+    let osc = saw(freq: note, unison: 3, spread: 7ct, width: 0.3, gain: 0.5)
+    let amp = adsr(attack: 8ms, decay: 200ms, sustain: 0.8, release: 200ms)
+    out lowpass(osc, cutoff: cutoff, q: 0.35) * amp * velocity
+  }
+
+  bus {
+    delay_fx(time: 1/4beat, feedback: 25%, mix: 15%, damp: 4khz)
+  }
+}

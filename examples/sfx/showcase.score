@@ -1,0 +1,44 @@
+# Um SFX a cada 2 beats @ 120bpm (1s cada, com respiro).
+tempo 120
+
+track a sfx_ui_click
+0 c5 0.2 0.9
+
+track b sfx_coin
+2 b5 0.3 0.9
+
+track c sfx_bell_chime
+4 e5 0.5 0.9
+
+track d sfx_jump
+6 c4 0.3 0.9
+
+track e sfx_powerup
+8 c4 0.6 0.9
+
+track f sfx_laser
+10 c6 0.3 0.9
+
+track g sfx_hit
+12 c3 0.3 0.95
+
+track h sfx_ui_error
+14 a4 0.4 0.9
+
+track i sfx_whoosh
+16 c4 0.8 0.9
+
+track j sfx_portal
+18 c4 1 0.9
+
+track k sfx_riser
+20 c3 2.2 0.9
+
+track l sfx_alarm
+24 a4 2 0.85
+
+track m sfx_explosion
+28 c2 1 1.0
+
+track n sfx_bell_church
+32 d4 4 0.95
