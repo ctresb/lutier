@@ -1,0 +1,177 @@
+# lutier presets - funk carioca / trap / beats eletronicos
+# Percussao: toque c2 (grave) ou c5 (agudos); velocity faz o groove
+# (0.3 = ghost, 0.6 = normal, 0.95 = acento). Tamborzao 3-3-2 no SKILL.md.
+
+# Kick 808: sub longo com drop de pitch - o "beat grave" do funk/trap.
+# Toque c2 (afina em c1..e2). Em trap, notas longas = sub cantado.
+synth kick_808 {
+  poly 2 steal oldest
+  gain -2db
+  kill after 2.5s
+
+  voice {
+    # punch: pitch cai de ~3x para a fundamental da nota em 70ms
+    let punch = env { hz(note) * 2.8 -> hz(note) * 0.98 in 70ms curve exp }
+    let sub = sine(freq: punch)
+    let click = highpass(noise(gain: 0.8), cutoff: 3khz, q: 0.3)
+              * env { 1 -> 0 in 12ms curve exp }
+    out (saturate(sub, amount: 0.5) + click * 0.5)
+      * env { 1 -> 0.72 in 120ms curve exp -> 0 in 750ms curve exp } * velocity
+  }
+}
+
+# Baixo 808 com glide: mono, desliza entre notas (linha de baixo de tamborzao/trap).
+# Escreva notas coladas (fim de uma = inicio da outra) para o glide aparecer.
+synth bass_808 {
+  mono glide 60ms legato
+  gain -4db
+
+  voice {
+    let body = sine(freq: note, gain: 0.9)
+    let growl = saturate(body, amount: 0.65)
+    let bite = lowpass(saw(freq: note, unison: 1, gain: 0.25), cutoff: 900hz, q: 0.4)
+    let amp = adsr(attack: 8ms, decay: 120ms, sustain: 0.85, release: 90ms)
+    out (growl + bite * 0.6) * amp * velocity
+  }
+}
+
+# Kick do tamborzao: seco e socado, decai rapido (deixa espaco pro 808).
+synth kick_tamborzao {
+  poly 2 steal oldest
+  gain -2db
+  kill after 1s
+
+  voice {
+    let drop = env { 210hz -> 52hz in 35ms curve exp }
+    let body = sine(freq: drop) * env { 1 -> 0 in 220ms curve exp }
+    let attack = bandpass(noise(gain: 1), cutoff: 1.8khz, q: 0.5)
+               * env { 1 -> 0 in 18ms curve exp }
+    out saturate(body + attack * 0.6, amount: 0.4) * velocity
+  }
+}
+
+# Tamborim: estalo agudo e seco (a costura ritmica do funk). Toque c5.
+synth tamborim {
+  poly 4 steal oldest
+  gain -6db
+  kill after 0.8s
+
+  voice {
+    let skin = modal(freq: hz(note) * 2.2, modes: membrane, strike: 0.25, decay: 0.18)
+    let snap = highpass(noise(gain: 1.2), cutoff: 4khz, q: 0.4)
+             * env { 1 -> 0 in 14ms curve exp }
+    out (skin * 1.4 + snap) * env { 1 -> 0 in 160ms curve exp } * velocity
+  }
+
+  bus {
+    haas(delay: 4ms)
+    widen(amount: 30%)
+  }
+}
+
+# Atabaque: mao no couro - grave com bend na pele. velocity alta = slap.
+# Toque c3 (open) / g3 (slap agudo).
+synth atabaque {
+  poly 4 steal oldest
+  gain -4db
+  kill after 1.5s
+
+  voice {
+    let bend = env { 1.14 -> 1 in 55ms curve exp }
+    let skin = modal(freq: hz(note) * bend, modes: membrane, strike: 0.3 + velocity * 0.3,
+                     decay: 0.5)
+    let slap = bandpass(noise(gain: 1.4), cutoff: 2.4khz, q: 0.6)
+             * env { 1 -> 0 in 25ms curve exp } * max(velocity - 0.55, 0) * 2
+    out (skin * 1.6 + slap) * velocity
+  }
+}
+
+# Clap: 4 micro-bursts + corpo (mao dupla de bateria eletronica). Toque c4.
+synth clap_funk {
+  poly 4 steal oldest
+  gain -4db
+  kill after 1s
+
+  voice {
+    # bursts: gate serrilhado rapido nos primeiros 30ms, depois corpo
+    let burst_gate = unipolar(lfo(shape: square, rate: 90hz, amount: 1))
+    let pre = bandpass(noise(gain: 1.6), cutoff: 1.4khz, q: 0.55)
+            * burst_gate * env { 1 -> 0 in 32ms curve lin }
+    let body = bandpass(noise(gain: 1.6), cutoff: 1.1khz, q: 0.45)
+             * env { 0 -> 1 in 28ms curve lin -> 0 in 180ms curve exp }
+    out (pre + body * 1.2) * velocity
+  }
+
+  bus {
+    reverb(size: 0.4, decay: 350ms, damp: 4khz, mix: 12%)
+  }
+}
+
+# Snare seca de trap/funk: corpo curto 200hz + chiado curto. Toque c4.
+synth snare_seca {
+  poly 4 steal oldest
+  gain -4db
+  kill after 1s
+
+  voice {
+    let shell = sine(freq: env { 340hz -> 190hz in 40ms curve exp })
+              * env { 1 -> 0 in 120ms curve exp }
+    let wires = highpass(noise(gain: 1), cutoff: 2.2khz, q: 0.3)
+              * env { 1 -> 0 in 140ms curve exp }
+    out (shell * 0.8 + wires) * velocity
+  }
+}
+
+# Hat de trap: fechado, curto, afinavel; rolls com x16 @0.25 no score. Toque c5.
+synth hat_trap {
+  poly 4 steal oldest
+  gain -9db
+  kill after 0.5s
+
+  voice {
+    let metal = highpass(noise(color: blue, gain: 1), cutoff: 7khz, q: 0.4)
+    out metal * env { 1 -> 0 in 45ms curve exp } * velocity
+  }
+
+  bus {
+    haas(delay: 6ms)
+    widen(amount: 40%)
+  }
+}
+
+# Stab de ponto: acorde-facada saw+square com filtro fechando (a "melodia
+# de arma" dos pontos de funk). Toque acordes curtos [c4 e4 g4] 0.5.
+synth stab_funk {
+  poly 6 steal oldest
+  gain -7db
+  kill after 1.5s
+
+  voice {
+    let osc = saw(freq: note, unison: 3, spread: 14ct, width: 0.6, gain: 0.35)
+            + square(freq: note - 12st, gain: 0.18)
+    let tone = lowpass(osc, cutoff: env { 4.5khz -> 500hz in 260ms curve exp }, q: 0.55)
+    out tone * env { 1 -> 0 in 320ms curve exp } * velocity
+  }
+
+  bus {
+    widen(amount: 35%)
+    delay_fx(time: 3/16beat, feedback: 25%, mix: 14%, pingpong: true, damp: 3khz)
+  }
+}
+
+# Apito de MC: assobio com vibrato e queda no final. Toque c6, notas de 0.5-1 beat.
+synth apito {
+  poly 2 steal oldest
+  gain -8db
+  kill after 1.5s
+
+  voice {
+    let vib = lfo(shape: sine, rate: 6.5hz, amount: 1)
+    let fall = env { 0st -> 0st in max(dur * 0.7, 0.1) curve lin -> -2st in 200ms curve exp }
+    let tone = sine(freq: note + vib * 0.4st + fall, gain: 0.7)
+             + sine(freq: note + 12st, gain: 0.08)
+    let breathn = bandpass(noise(gain: 0.3), cutoff: hz(note) * 2, q: 0.8)
+    out (tone + breathn) * adsr(attack: 15ms, decay: 60ms, sustain: 0.85, release: 120ms)
+      * velocity
+  }
+}

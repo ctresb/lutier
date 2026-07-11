@@ -192,22 +192,195 @@ synth sfx_whoosh {
   }
 }
 
-# Riser: tensão subindo ~2s (pré-drop, sustos). Toque c3.
+# ============================ RISERS E TRANSICOES ============================
+# Todos os risers escalam com a DURACAO DA NOTA (builtin `dur`): a rampa ocupa
+# a nota inteira e termina EXATA no proximo tempo forte. Ex.: riser de 8 beats
+# ate o drop no beat 32 -> `24 c3 8 0.9`. Sem adivinhar segundos.
+
+# Riser principal (full-spectrum): comeca quase MUDO e ESCURO, cresce suave;
+# ar e tick so entram na 2a metade; termina soltando cauda de reverb (nao corta
+# seco). Toque c3, dur = ate o drop.
 synth sfx_riser {
   poly 2 steal oldest
-  gain -5db
-  kill after 3s
+  gain -4db
+  kill after 26s
 
   voice {
-    let climb = env { 0st -> 12st in 2s curve log }
-    let body = saw(freq: note + climb, unison: 5, spread: 20ct, width: 0.8, gain: 0.4)
-    let hiss = highpass(noise(gain: 0.4), cutoff: 5khz, q: 0.3)
-    out (body + hiss * env { 0 -> 1 in 2s curve exp })
-      * env { 0 -> 1 in 2s curve log -> 0 in 200ms curve exp } * velocity
+    let d = max(dur, 0.8)
+    # tensao mestre 0->1: pow(2) = quieto por muito tempo, cresce no fim
+    let ten = env { 0 -> 1 in d curve pow(2) }
+    # 1) corpo tonal: saws detunados subindo 1 oitava; filtro abre em pow2
+    #    (escuro ate a metade, so brilha perto do drop)
+    let climb = env { 0st -> 12st in d curve pow(1.6) }
+    let cluster = saw(freq: note + climb, unison: 5, spread: 22ct, width: 0.85, gain: 0.3)
+    let body = lowpass(cluster, cutoff: 180hz + ten * ten * 4300hz, q: 0.3)
+    # 2) ar: ruido PINK (nao branco), so aparece depois de 1/3 da subida
+    let air = highpass(noise(color: pink, gain: 1.1), cutoff: 900hz, q: 0.25)
+            * max(ten - 0.35, 0) * 1.5
+    # 3) tick acelerando: discreto, so na metade final
+    let tick = unipolar(lfo(shape: square, rate: 2hz + ten * 12hz))
+             * bandpass(noise(color: pink, gain: 1.2), cutoff: 2.2khz, q: 0.5)
+             * max(ten - 0.5, 0) * 0.5
+    # 4) sub inflando no ultimo terco (o "peso" chegando)
+    let sub = sine(freq: note - 12st, gain: 0.5)
+            * env { 0 -> 0.04 in d * 0.66 curve lin -> 1 in d * 0.34 curve pow(2.2) }
+    # fim: solta em 450ms + cauda de reverb (o drop respira sem "tec" de corte)
+    let gatecut = adsr(attack: 5ms, decay: 1ms, sustain: 1, release: 450ms)
+    out (body + air + tick + sub) * ten * gatecut * velocity
+  }
+
+  bus {
+    widen(amount: 55%)
+    reverb(size: 0.8, decay: 2.2s, damp: 4khz, mix: 22%)
+  }
+}
+
+# Riser tonal/uplifter musical: sobe UMA oitava exata e resolve no drop.
+# Menos ruido, mais nota - funciona dentro da harmonia. Toque a tonica.
+synth sfx_riser_tonal {
+  poly 2 steal oldest
+  gain -5db
+  kill after 24s
+
+  voice {
+    let d = max(dur, 0.8)
+    let ten = env { 0 -> 1 in d curve pow(1.8) }
+    let climb = env { 0st -> 12st in d curve pow(1.4) }
+    let lead = saw(freq: note + climb, unison: 4, spread: 14ct, width: 0.8, gain: 0.3)
+             + saw(freq: note + 7st + climb, unison: 3, spread: 12ct, width: 0.7, gain: 0.12)
+    # abre em pow2: fica no medio-escuro quase toda a subida
+    let tone = lowpass(lead, cutoff: 400hz + ten * ten * 3600hz, q: 0.35)
+    # brilho so no ultimo terco, discreto
+    let sparkle = sine(freq: note + 24st + climb, gain: 0.2) * max(ten - 0.6, 0)
+    let gatecut = adsr(attack: 5ms, decay: 1ms, sustain: 1, release: 500ms)
+    out (tone + sparkle) * ten * gatecut * velocity
+  }
+
+  bus {
+    widen(amount: 45%)
+    delay_fx(time: 3/16beat, feedback: 30%, mix: 16%, pingpong: true, damp: 4khz)
+    reverb(size: 0.7, decay: 1.8s, damp: 4khz, mix: 15%)
+  }
+}
+
+# Riser de ruido puro (sutil): sweep de bandpass subindo - transicao de cena,
+# UI, ambiente. Sem conteudo tonal, encaixa em qualquer tom.
+synth sfx_riser_noise {
+  poly 2 steal oldest
+  gain -6db
+  kill after 24s
+
+  voice {
+    let d = max(dur, 0.5)
+    let ten = env { 0 -> 1 in d curve pow(2.2) }
+    # para em 6khz (9khz assobiava); banda larga = sopro, nao apito
+    let sweep = bandpass(noise(color: pink, gain: 2.4),
+                         cutoff: 400hz + ten * 5600hz, q: 0.4)
+    let gatecut = adsr(attack: 10ms, decay: 1ms, sustain: 1, release: 400ms)
+    out sweep * ten * gatecut * velocity
+  }
+
+  bus {
+    widen(amount: 70%)
+    reverb(size: 0.7, decay: 1.6s, damp: 3.5khz, mix: 18%)
+  }
+}
+
+# Shepard riser: subida INFINITA (ilusao) enquanto a nota estiver segurada.
+# 3 camadas ciclicas defasadas com janela de ganho. Tensao continua de cena.
+synth sfx_shepard {
+  poly 1 steal oldest
+  gain -7db
+  kill after 30s
+
+  voice {
+    # cada camada sobe 4 oitavas por ciclo de 12 beats; janela triangular
+    # defasada esconde o reinicio = escada de Shepard
+    let c1 = unipolar(lfo(shape: saw, rate: 12beat, phase: 0.0))
+    let c2 = unipolar(lfo(shape: saw, rate: 12beat, phase: 0.333))
+    let c3 = unipolar(lfo(shape: saw, rate: 12beat, phase: 0.667))
+    let w1 = unipolar(lfo(shape: triangle, rate: 12beat, phase: 0.0))
+    let w2 = unipolar(lfo(shape: triangle, rate: 12beat, phase: 0.333))
+    let w3 = unipolar(lfo(shape: triangle, rate: 12beat, phase: 0.667))
+    let l1 = saw(freq: note - 24st + c1 * 48st, unison: 3, spread: 12ct, gain: 0.5) * w1
+    let l2 = saw(freq: note - 24st + c2 * 48st, unison: 3, spread: 12ct, gain: 0.5) * w2
+    let l3 = saw(freq: note - 24st + c3 * 48st, unison: 3, spread: 12ct, gain: 0.5) * w3
+    # bandpass da foco no medio; lowpass tira a aspereza de saw no topo
+    let mix = lowpass(bandpass(l1 + l2 + l3, cutoff: 1.1khz, q: 0.15) * 3.5,
+                      cutoff: 2.8khz, q: 0.3)
+    let amp = adsr(attack: 1.2s, decay: 1ms, sustain: 1, release: 900ms)
+    out mix * amp * velocity
+  }
+
+  bus {
+    widen(amount: 55%)
+    reverb(size: 0.8, decay: 2s, damp: 4khz, mix: 15%)
+  }
+}
+
+# Downlifter: o irmao do riser DEPOIS do drop - cai e abre espaco. Toque c4.
+synth sfx_downlifter {
+  poly 2 steal oldest
+  gain -6db
+  kill after 24s
+
+  voice {
+    let d = max(dur, 0.6)
+    let fall = env { 0 -> 1 in d curve pow(0.8) }
+    let drop = env { 0st -> -12st in d curve pow(0.8) }
+    let body = saw(freq: note + drop, unison: 4, spread: 18ct, width: 0.8, gain: 0.28)
+    # comeca no medio (3khz), nao no agudo; fecha ate quase mudo
+    let tone = lowpass(body, cutoff: 3khz - fall * 2700hz, q: 0.3)
+    let air = highpass(noise(color: pink, gain: 0.7), cutoff: 1.5khz, q: 0.25)
+            * (0.4 - fall * 0.4)
+    # ataque de 60ms (nao estala) e solta com cauda
+    let gatecut = adsr(attack: 60ms, decay: 1ms, sustain: 1, release: 400ms)
+    out (tone + air) * (1 - fall * 0.92) * gatecut * velocity
   }
 
   bus {
     widen(amount: 50%)
+    reverb(size: 0.75, decay: 1.8s, damp: 3.5khz, mix: 18%)
+  }
+}
+
+# Sub drop: mergulho de sub pos-drop (aquele "woooum" descendo). Toque c2.
+synth sfx_sub_drop {
+  poly 2 steal oldest
+  gain -3db
+  kill after 4s
+
+  voice {
+    let dive = sine(freq: env { 110hz -> 28hz in 900ms curve exp })
+    let sat = saturate(dive, amount: 0.35)
+    out sat * env { 0 -> 1 in 30ms curve lin -> 0.7 in 500ms curve lin -> 0 in 1.4s curve exp }
+      * velocity
+  }
+}
+
+# Impacto cinematografico: crack + boom de sub + anel metalico + wash. Toque c2.
+synth sfx_impact {
+  poly 2 steal oldest
+  gain -6db
+  kill after 6s
+
+  voice {
+    let crack = nwave(dur: 3ms, sharp: 0.9, reflect: 5ms, reflect_gain: 0.4,
+                      air: 7khz, gain: 1.6)
+    let boom = sine(freq: env { 120hz -> 32hz in 250ms curve exp })
+             * env { 1 -> 0 in 1.8s curve exp }
+    let ring = modal(freq: hz(note) * 3, modes: bar, strike: 0.4, decay: 0.6)
+             * env { 1 -> 0 in 2.5s curve exp } * 0.25
+    let wash = lowpass(noise(color: brown, gain: 0.8),
+                       cutoff: env { 4khz -> 150hz in 2s curve exp }, q: 0.3)
+             * env { 1 -> 0 in 2.2s curve exp }
+    let glued = clip(drive(crack + boom * 1.5 + ring + wash, amount: 0.6), level: 0.95)
+    out glued * velocity
+  }
+
+  bus {
+    widen(amount: 40%)
+    reverb(size: 0.9, decay: 3s, damp: 2.5khz, mix: 22%)
   }
 }
 

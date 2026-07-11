@@ -173,25 +173,55 @@ synth cello {
   }
 }
 
-# Flauta fisica: jato de ar + tubo (waveguide). Pressao util 0.9..1.2;
-# breath da o chiado de sopro. Melhor entre c4 e c6.
+# Flauta fisica (jet-drive waveguide estilo STK/Verge): tubo em overblow no
+# 2o modo, jato com delay proprio, turbulencia fisica DENTRO do loop (pulsa
+# com o ciclo, nao chia por cima). Pressao util 0.4..1.3 (remap interno);
+# brilho sobe com pressure. jet: 0.32 e o balanco harmonico (0.25 brilhante,
+# 0.4 escuro). Registro g3..g5, +-2ct.
 synth flauta {
   poly 3 steal oldest
   gain -5db
   kill after 5s
 
   voice {
+    # vibrato de sopro (5.9hz, entra depois de 400ms) + micro-instabilidade
     let vib_depth = env { 0 -> 1 in 500ms curve log }
-    let vib = lfo(shape: sine, rate: 5hz, amount: 1) * vib_depth * 0.012
-    # ataque de lingua: pressao sobe em ~60ms; release = fim do sopro
-    let sopro = env { 0 -> 1 in 60ms curve exp sustain 1 release -> 0 in 120ms curve exp }
-    let tubo = flute(freq: hz(note), pressure: sopro * (0.95 + vib + velocity * 0.1),
-                     breath: 0.04)
-    out tubo
+    let vib = lfo(shape: sine, rate: 5.9hz, amount: 1) * vib_depth * 0.012
+    # ataque de lingua: sobe em 40ms com OVERSHOOT (o chiff: sopro forte
+    # demais por um instante excita o transiente real de flauta)
+    let sopro = env { 0 -> 1.12 in 40ms curve exp -> 1 in 90ms curve exp
+                      sustain 1 release -> 0 in 120ms curve exp }
+    # sopro mais ruidoso no ataque, assenta no sustain
+    let chiff = env { 0.11 -> 0.03 in 180ms curve exp sustain 0.03 release -> 0.03 in 50ms }
+    let tubo = flute(freq: hz(note), pressure: sopro * (0.93 + vib + velocity * 0.12),
+                     breath: chiff, jet: 0.32)
+    # rms do regime e comprimido: metade da dinamica pp->ff sai no nivel
+    out tubo * (0.5 + velocity * 0.55)
   }
 
   bus {
     reverb(size: 0.65, decay: 1.4s, damp: 7khz, mix: 16%)
+  }
+}
+
+# Flauta doce (recorder): som mais puro e recto, sem vibrato de sopro,
+# jato mais longo = timbre mais cheio. Toque c4..c6, notas destacadas.
+synth flauta_doce {
+  poly 3 steal oldest
+  gain -5db
+  kill after 5s
+
+  voice {
+    let sopro = env { 0 -> 1.08 in 25ms curve exp -> 0.98 in 60ms curve exp
+                      sustain 0.98 release -> 0 in 90ms curve exp }
+    let chiff = env { 0.08 -> 0.02 in 120ms curve exp sustain 0.02 release -> 0.02 in 50ms }
+    let tubo = flute(freq: hz(note), pressure: sopro * (0.96 + velocity * 0.08),
+                     breath: chiff, jet: 0.42)
+    out tubo * (0.6 + velocity * 0.45)
+  }
+
+  bus {
+    reverb(size: 0.55, decay: 1.1s, damp: 7khz, mix: 13%)
   }
 }
 
@@ -206,7 +236,7 @@ synth clarinete {
     let sopro = env { 0 -> 0.85 in 90ms curve exp sustain 0.85 release -> 0 in 140ms curve exp }
     let tubo = reed(freq: hz(note), pressure: sopro * (0.9 + velocity * 0.15),
                     stiffness: 0.5, breath: 0.03)
-    out tubo
+    out tubo * (0.6 + velocity * 0.45)
   }
 
   bus {
@@ -299,7 +329,7 @@ synth trompete {
     let vib = lfo(shape: sine, rate: 5hz, amount: 0.012) * vibd
     let b = brass(freq: hz(note), pressure: sopro * (0.5 + velocity * 0.65) + vib,
                   lip: 1.0, bell: 1.8khz, rasp: 0.55, breath: 0.02)
-    out b
+    out b * (0.4 + velocity * 0.7)
   }
 
   bus {
@@ -317,7 +347,7 @@ synth trompa {
     let sopro = env { 0 -> 1 in 120ms curve exp sustain 1 release -> 0 in 250ms curve exp }
     let b = brass(freq: hz(note), pressure: sopro * (0.45 + velocity * 0.5),
                   lip: 1.0, bell: 900hz, rasp: 0.35, breath: 0.03)
-    out b
+    out b * (0.5 + velocity * 0.6)
   }
 
   bus {
@@ -335,7 +365,7 @@ synth trombone {
     let sopro = env { 0 -> 1 in 70ms curve exp sustain 1 release -> 0 in 180ms curve exp }
     let b = brass(freq: hz(note), pressure: sopro * (0.5 + velocity * 0.7),
                   lip: 1.0, bell: 1.1khz, rasp: 0.65, breath: 0.025)
-    out b
+    out b * (0.45 + velocity * 0.65)
   }
 
   bus {

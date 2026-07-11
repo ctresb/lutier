@@ -1,0 +1,229 @@
+# lutier presets - sons da natureza (ambiencias procedurais, zero samples)
+# Todos sustentam enquanto a nota estiver segurada (solte para a cauda morrer).
+# Nota recomendada em cada preset; velocity = intensidade da cena.
+
+# Vento: cama de ruido com rajadas organicas (3 LFOs dessincronizados somados).
+# Segure c3 por barras inteiras. velocity alto = vendaval.
+synth vento {
+  poly 2 steal oldest
+  gain -3db
+
+  voice {
+    # deriva lenta e nao-periodica: soma de 3 lfos em razoes irracionais
+    let drift = lfo(shape: sine, rate: 0.07hz, amount: 1)
+              + lfo(shape: sine, rate: 0.113hz, amount: 0.7, phase: 0.37)
+              + lfo(shape: triangle, rate: 0.041hz, amount: 0.5, phase: 0.71)
+    let gust = unipolar(lfo(shape: sine, rate: 0.19hz, amount: 1, phase: 0.13))
+    let bed = lowpass(noise(color: pink, gain: 1.1),
+                      cutoff: 350hz + drift * 120hz + gust * 500hz, q: 0.35)
+    # assobio de fresta: banda estreita que aparece so nas rajadas fortes
+    let whistle = bandpass(noise(gain: 0.8), cutoff: 1.6khz + drift * 300hz, q: 0.92)
+                * max(gust - 0.55, 0) * 1.4
+    let amp = adsr(attack: 1.5s, decay: 1ms, sustain: 1, release: 2.5s)
+    out (bed * (0.45 + gust * 0.55) + whistle) * amp * velocity
+  }
+
+  bus {
+    haas(delay: 14ms)
+    widen(amount: 65%)
+  }
+}
+
+# Chuva: hiss de gotas finas + gotejamento granular. Segure c3.
+# velocity baixa = garoa, alta = aguaceiro.
+synth chuva {
+  poly 2 steal oldest
+  gain -1db
+
+  voice {
+    # lamina fina: ruido claro e constante (o "sheet" da chuva ao longe)
+    let sheet = highpass(noise(gain: 1.3), cutoff: 2.2khz, q: 0.25)
+    # gotas: crackle denso em banda media-alta (impactos individuais)
+    let drops = bandpass(noise(color: crackle, density: 400, gain: 6),
+                         cutoff: 4khz, q: 0.4)
+    # gotas grossas esparsas em superficie proxima
+    let plop = bandpass(noise(color: crackle, density: 18, gain: 6),
+                        cutoff: 900hz, q: 0.7) * 0.5
+    let amp = adsr(attack: 2s, decay: 1ms, sustain: 1, release: 3s)
+    out (sheet * 1.4 + drops * 0.8 + plop) * amp * velocity
+  }
+
+  bus {
+    haas(delay: 9ms)
+    widen(amount: 55%)
+    reverb(size: 0.6, decay: 900ms, damp: 5khz, mix: 10%)
+  }
+}
+
+# Oceano: ondas quebrando em ciclo ~11s + espuma. Segure c2 por 30s+.
+synth oceano {
+  poly 1 steal oldest
+  gain -13db
+
+  voice {
+    # ciclo da onda: cresce, quebra, recua (assimetrico via pow)
+    let wave = unipolar(lfo(shape: sine, rate: 0.09hz, amount: 1))
+    let swell = wave * wave           # pow2 = subida lenta, pico agudo
+    # corpo grave da agua
+    let body = lowpass(noise(color: brown, gain: 2.2),
+                       cutoff: 180hz + swell * 700hz, q: 0.3)
+    # espuma: hiss que explode no pico da onda e escorre depois (segue o swell)
+    let foam = highpass(noise(color: pink, gain: 1), cutoff: 1.2khz, q: 0.3)
+             * follower(swell, attack: 300ms, release: 2.5s) * 1.6
+    # segunda onda dessincronizada ao fundo (mar nunca repete)
+    let wave2 = unipolar(lfo(shape: sine, rate: 0.067hz, amount: 1, phase: 0.43))
+    let far = lowpass(noise(color: brown, gain: 1.2), cutoff: 120hz + wave2 * 250hz, q: 0.3)
+    let amp = adsr(attack: 2.5s, decay: 1ms, sustain: 1, release: 4s)
+    out (body * (0.25 + swell) + foam + far * 0.5) * amp * velocity
+  }
+
+  bus {
+    haas(delay: 17ms)
+    widen(amount: 70%)
+  }
+}
+
+# Riacho: borbulho medio continuo com gorgolejos aleatorios. Segure c4.
+synth riacho {
+  poly 2 steal oldest
+  gain -1db
+
+  voice {
+    # centro da banda pula aleatoriamente = gorgolejo
+    let burble = lfo(shape: sample_hold, rate: 6hz, amount: 1)
+    let burble2 = lfo(shape: sample_hold, rate: 9.7hz, amount: 1, phase: 0.5)
+    let water = bandpass(noise(color: pink, gain: 4.5),
+                         cutoff: 1.3khz + burble * 500hz, q: 0.75)
+             + bandpass(noise(color: pink, gain: 3.4),
+                        cutoff: 2.6khz + burble2 * 900hz, q: 0.8) * 0.6
+    # brilho de superficie
+    let sparkle = highpass(noise(gain: 0.6), cutoff: 6khz, q: 0.3)
+    let amp = adsr(attack: 1.2s, decay: 1ms, sustain: 1, release: 2s)
+    out (water + sparkle) * amp * velocity
+  }
+
+  bus {
+    haas(delay: 7ms)
+    widen(amount: 60%)
+  }
+}
+
+# Trovao: estalo + rasgo + ribombar longo (one-shot ~7s). Toque c1 ou c2.
+# velocity = distancia (baixa = longe, so o rumble; alta = perto, com crack).
+synth trovao {
+  poly 2 steal oldest
+  gain -11db
+  kill after 9s
+
+  voice {
+    # crack inicial so em velocity alta (perto)
+    let crack = nwave(dur: 6ms, sharp: 0.8, reflect: 9ms, reflect_gain: 0.5,
+                      air: 3khz, gain: 1.4) * max(velocity - 0.5, 0) * 2
+    # rasgo: banda media rasgando logo apos o crack
+    let tear = bandpass(noise(gain: 2), cutoff: env { 700hz -> 150hz in 1.2s curve exp }, q: 0.5)
+             * env { 0 -> 1 in 60ms curve lin -> 0 in 2s curve exp }
+    # ribombar: sub rolando com AM lenta irregular (ecoa nos morros)
+    let roll_am = 0.55 + unipolar(lfo(shape: sine, rate: 1.7hz, amount: 1)) * 0.25
+                + unipolar(lfo(shape: sine, rate: 0.9hz, amount: 1, phase: 0.3)) * 0.2
+    let roll = lowpass(noise(color: brown, gain: 3),
+                       cutoff: env { 220hz -> 60hz in 4s curve exp }, q: 0.3)
+             * roll_am * env { 0 -> 1 in 250ms curve log -> 0 in 6s curve exp }
+    out (crack + tear + roll * 1.6) * velocity
+  }
+
+  bus {
+    haas(delay: 12ms)
+    widen(amount: 45%)
+    reverb(size: 0.95, decay: 3.5s, damp: 1.2khz, mix: 20%)
+  }
+}
+
+# Fogueira: crepitar + estalos + roar grave de chama. Segure c2.
+synth fogueira {
+  poly 2 steal oldest
+  gain -11db
+
+  voice {
+    # chama: roar grave respirando
+    let breath_f = 0.6 + unipolar(lfo(shape: sine, rate: 0.31hz, amount: 1)) * 0.4
+    let flame = lowpass(noise(color: brown, gain: 1.6), cutoff: 140hz, q: 0.3) * breath_f
+    # crepitar continuo (brasas)
+    let crackle_bed = bandpass(noise(color: crackle, density: 55, gain: 2.4),
+                               cutoff: 2.8khz, q: 0.45)
+    # estalos fortes esparsos (madeira partindo)
+    let pop = bandpass(noise(color: crackle, density: 3, gain: 4),
+                       cutoff: 1.1khz, q: 0.6)
+    let amp = adsr(attack: 800ms, decay: 1ms, sustain: 1, release: 1.5s)
+    out (flame + crackle_bed * 0.8 + pop * 0.9) * amp * velocity
+  }
+
+  bus {
+    haas(delay: 5ms)
+    widen(amount: 35%)
+  }
+}
+
+# Grilos: coro noturno (trilo ~4.4khz em grupos). Segure a6 (a nota afina o coro).
+synth grilos {
+  poly 4 steal oldest
+  gain 9db
+
+  voice {
+    # trilo: portadora aguda gateada rapido; grupos de chirp mais lentos
+    let trill = unipolar(lfo(shape: square, rate: 21hz + rand * 6hz, amount: 1))
+    let group = unipolar(lfo(shape: square, rate: 0.8hz + rand * 0.5hz, amount: 1, phase: 0.2))
+    let carrier = sine(freq: hz(note) * (0.97 + rand * 0.06), gain: 0.75)
+                + sine(freq: hz(note) * (1.94 + rand * 0.12), gain: 0.12)
+    let amp = adsr(attack: 400ms, decay: 1ms, sustain: 1, release: 800ms)
+    out carrier * trill * (0.25 + group * 0.75) * amp * velocity
+  }
+
+  bus {
+    haas(delay: 11ms)
+    widen(amount: 60%)
+    reverb(size: 0.75, decay: 1.5s, damp: 8khz, mix: 12%)
+  }
+}
+
+# Sapos: coaxar em pulsos roucos. Segure f2..c3; poly = coro de sapos.
+synth sapos {
+  poly 4 steal oldest
+  gain 6db
+
+  voice {
+    # cada sapo coaxa no proprio ritmo (rand dessincroniza)
+    let croak_gate = unipolar(lfo(shape: square, rate: 0.5hz + rand * 0.4hz, amount: 1, phase: 0.1))
+    let ribbit = unipolar(lfo(shape: square, rate: 13hz + rand * 5hz, amount: 1))
+    let source = pulse(freq: hz(note) * (0.95 + rand * 0.1), width: 25%, gain: 0.5)
+    let formant = bandpass(source, cutoff: 750hz + rand * 250hz, q: 0.7)
+    let amp = adsr(attack: 300ms, decay: 1ms, sustain: 1, release: 500ms)
+    out formant * ribbit * croak_gate * amp * velocity * 3.5
+  }
+
+  bus {
+    reverb(size: 0.8, decay: 1.8s, damp: 3khz, mix: 16%)
+  }
+}
+
+# Passaros de floresta: canto com silabas aleatorias (pitch salta por sample_hold).
+# Toque a6..d7 em notas de 1-2 beats, esparsas. poly = varios passaros.
+synth passaros {
+  poly 4 steal oldest
+  gain 10db
+  kill after 3s
+
+  voice {
+    # silabas: pitch salta em degraus rapidos; warble fino por cima
+    let syllable = lfo(shape: sample_hold, rate: 11hz + rand * 4hz, amount: 1)
+    let warble = lfo(shape: sine, rate: 27hz + rand * 8hz, amount: 1)
+    let gatectl = unipolar(lfo(shape: square, rate: 7hz + rand * 3hz, amount: 1, phase: 0.2))
+    let tone = sine(freq: note + syllable * 3st + warble * 0.8st, gain: 0.75)
+             + sine(freq: note + 12st + syllable * 4st, gain: 0.07)
+    let arc = env { 0 -> 1 in 30ms curve lin -> 0.7 in 400ms curve exp -> 0 in 300ms curve exp }
+    out tone * gatectl * arc * velocity
+  }
+
+  bus {
+    reverb(size: 0.72, decay: 1.4s, damp: 7khz, mix: 18%)
+  }
+}
