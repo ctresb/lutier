@@ -1,0 +1,256 @@
+/* lutier DAW — tudo quadrado, mínimo de estilo, máximo de função. */
+
+:root {
+  --bg: #141414;
+  --panel: #1d1d1d;
+  --panel-2: #242424;
+  --line: #383838;
+  --line-soft: #2a2a2a;
+  --text: #e6e6e6;
+  --text-dim: #909090;
+  --accent: #ffcc44;
+  --danger: #ff5544;
+  --row-h: 18px;
+  --beat-w: 96px;
+}
+
+* { box-sizing: border-box; border-radius: 0; }
+
+html, body {
+  margin: 0;
+  height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font: 12px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+body { display: flex; flex-direction: column; overflow: hidden; }
+
+/* ---------- toolbar ---------- */
+
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+#toolbar .spacer { flex: 1; }
+
+#toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  padding: 5px 10px;
+  cursor: pointer;
+  min-height: 28px;
+}
+button:hover:not(:disabled) { background: #2e2e2e; border-color: #555; }
+button:active:not(:disabled) { background: #111; }
+button:disabled { color: var(--text-dim); cursor: default; opacity: 0.55; }
+button:focus-visible, input:focus-visible, select:focus-visible, #grid:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+#btn-play { border-color: var(--accent); }
+
+input[type="number"], select, input[type="text"] {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 4px 6px;
+  min-height: 28px;
+}
+input[type="number"] { width: 58px; text-align: right; }
+input[type="range"] { accent-color: var(--accent); width: 110px; }
+output { min-width: 34px; color: var(--text); }
+
+#status { color: var(--text-dim); min-width: 120px; }
+#status.err { color: var(--danger); }
+#status.busy { color: var(--accent); }
+
+/* ---------- layout ---------- */
+
+#workspace { flex: 1; display: flex; min-height: 0; }
+
+#tracks {
+  width: 232px;
+  flex: none;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+#btn-add-track { margin: 8px; }
+
+#hint { margin: auto 8px 8px; color: var(--text-dim); }
+
+/* ---------- track list ---------- */
+
+.track {
+  display: grid;
+  grid-template-columns: 6px 1fr auto auto;
+  grid-template-rows: auto auto;
+  gap: 4px 6px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: pointer;
+  background: var(--panel);
+}
+.track:hover { background: var(--panel-2); }
+.track.sel { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+
+.track .swatch { grid-row: 1 / 3; width: 6px; }
+.track input[type="text"] { min-width: 0; min-height: 24px; padding: 2px 5px; background: transparent; }
+.track.sel input[type="text"] { background: var(--bg); }
+.track select { grid-column: 2 / 5; min-height: 24px; width: 100%; }
+
+.track .tbtn { min-height: 24px; padding: 2px 7px; }
+.track .tbtn.on { background: var(--accent); color: #111; border-color: var(--accent); }
+.track .tbtn.del:hover { color: var(--danger); border-color: var(--danger); }
+
+/* ---------- editor ---------- */
+
+#editor {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.row-top {
+  position: sticky; top: 0; z-index: 3;
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+}
+
+.row-body {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+}
+
+#ruler-corner {
+  position: sticky; left: 0; z-index: 1;
+  flex: none;
+  width: 56px;
+  height: 26px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+#ruler {
+  position: relative;
+  flex: none;
+  height: 26px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.ruler-beat {
+  position: absolute; top: 0; bottom: 0;
+  border-left: 1px solid var(--line);
+  padding: 5px 0 0 4px;
+  color: var(--text-dim);
+  width: var(--beat-w);
+}
+.ruler-beat.bar { color: var(--text); }
+
+#keys {
+  position: sticky; left: 0; z-index: 2;
+  flex: none;
+  width: 56px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+}
+.key {
+  height: var(--row-h);
+  padding: 0 6px 0 0;
+  text-align: right;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--line-soft);
+  line-height: var(--row-h);
+}
+.key.black { background: #181818; color: #666; }
+.key.c { color: var(--text); background: var(--panel-2); }
+
+#grid {
+  position: relative;
+  cursor: cell;
+  background:
+    repeating-linear-gradient(to bottom,
+      transparent 0, transparent calc(var(--row-h) - 1px),
+      var(--line-soft) calc(var(--row-h) - 1px), var(--line-soft) var(--row-h)),
+    repeating-linear-gradient(to right,
+      transparent 0, transparent calc(var(--beat-w) / 4 - 1px),
+      var(--line-soft) calc(var(--beat-w) / 4 - 1px), var(--line-soft) calc(var(--beat-w) / 4)),
+    repeating-linear-gradient(to right,
+      var(--line) 0, var(--line) 1px,
+      transparent 1px, transparent var(--beat-w));
+}
+
+/* linhas de compasso (4 beats) mais fortes, via elementos */
+.barline {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: #4a4a4a;
+  pointer-events: none;
+}
+.rowshade {
+  position: absolute; left: 0; right: 0; height: var(--row-h);
+  background: rgba(255, 255, 255, 0.025);
+  pointer-events: none;
+}
+
+/* ---------- notas ---------- */
+
+.note {
+  position: absolute;
+  height: calc(var(--row-h) - 1px);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  cursor: grab;
+  min-width: 6px;
+}
+.note:active { cursor: grabbing; }
+.note.sel { outline: 2px solid #fff; outline-offset: -1px; z-index: 1; }
+.note .grip {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 7px;
+  cursor: ew-resize;
+}
+.note.ghost { opacity: 0.28; pointer-events: none; }
+
+#playhead {
+  position: absolute; top: 0; bottom: 0; width: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ---------- estreito ---------- */
+
+@media (max-width: 700px) {
+  #workspace { flex-direction: column; }
+  #tracks {
+    width: 100%;
+    max-height: 38dvh;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  #hint { display: none; }
+}

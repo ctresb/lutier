@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lutier DAW</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="toolbar">
+  <button id="btn-play" title="Tocar (espaço)">&#9654; Tocar</button>
+  <button id="btn-stop" title="Parar" disabled>&#9632; Parar</button>
+  <span id="status" role="status"></span>
+
+  <span class="spacer"></span>
+
+  <label>tempo
+    <input id="in-tempo" type="number" min="20" max="300" step="1" value="110"> bpm
+  </label>
+  <label>duração
+    <input id="in-beats" type="number" min="4" max="512" step="4" value="32"> beats
+  </label>
+  <label>grade
+    <select id="in-snap">
+      <option value="0.25">1/16</option>
+      <option value="0.5" selected>1/8</option>
+      <option value="1">1/4</option>
+    </select>
+  </label>
+  <label>velocity
+    <input id="in-vel" type="range" min="10" max="100" step="5" value="75">
+    <output id="out-vel">0.75</output>
+  </label>
+
+  <span class="spacer"></span>
+
+  <button id="btn-score">Baixar .score</button>
+  <button id="btn-synth">Baixar .synth</button>
+</header>
+
+<main id="workspace">
+  <aside id="tracks">
+    <div id="track-list"></div>
+    <button id="btn-add-track">+ Nova faixa</button>
+    <p id="hint">clique na grade cria nota &middot; arrastar move &middot;
+      borda direita estica &middot; clique direito ou duplo apaga &middot;
+      espa&ccedil;o toca</p>
+  </aside>
+
+  <section id="editor">
+    <div class="row-top">
+      <div id="ruler-corner"></div>
+      <div id="ruler"></div>
+    </div>
+    <div class="row-body">
+      <div id="keys"></div>
+      <div id="grid" tabindex="0" aria-label="piano roll">
+        <div id="playhead" hidden></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<audio id="player"></audio>
+<script src="app.js"></script>
+</body>
+</html>
