@@ -1,0 +1,33 @@
+# "PRACINHA v2" - lobby suave e memorável.
+# A estrela agora é a kalimba (quente, redonda) cantando um HOOK de ninar:
+# duas semínimas + mínima, todo compasso. Ouviu uma vez, assobia pra sempre.
+# O boop continua sendo o mascote sonoro, mas caiu 5db e despenca devagar.
+import "presets/keys.synth"     # kalimba, music_box, epiano_fm, harp
+import "presets/bass.synth"     # bass_deep
+import "presets/drums.synth"    # shaker, kick_deep
+import "presets/pads.synth"     # strings_warm
+
+# ================= A ASSINATURA: o boop (versão gentil) =================
+# Seno que desce uma quinta (não mais uma oitava), devagar, com eco macio.
+synth boop {
+  poly 4 steal oldest
+  gain -10db
+
+  voice {
+    let pd  = env { 1 -> 0 in 140ms curve exp }
+    let osc = sine(freq: note + pd * 7st, gain: 0.9)
+    let amp = env { 1 -> 0 in 450ms curve exp }
+    out osc * amp * velocity
+  }
+
+  bus {
+    delay_fx(time: 3/8beat, feedback: 25%, mix: 14%, pingpong: true, damp: 4khz)
+    reverb(size: 0.6, decay: 1.6s, damp: 4.5khz, mix: 20%)
+  }
+}
+
+master {
+  bus_gain 0db
+  compressor(threshold: -18db, ratio: 2.2, attack: 15ms, release: 220ms, makeup: auto)
+  limiter(ceiling: -1db, lookahead: 5ms, release: 80ms)
+}

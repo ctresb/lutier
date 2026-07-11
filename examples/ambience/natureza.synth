@@ -1,0 +1,8 @@
+# Vitrine de ambiencias - todos os sons de presets/nature.synth em sequencia.
+import "presets/nature.synth"
+
+master {
+  bus_gain 8db
+  compressor(threshold: -20db, ratio: 2, attack: 20ms, release: 250ms, makeup: auto)
+  limiter(ceiling: -1db, lookahead: 5ms, release: 80ms)
+}

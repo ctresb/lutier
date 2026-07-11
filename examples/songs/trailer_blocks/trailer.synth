@@ -1,0 +1,43 @@
+import "presets/pads.synth"
+import "presets/keys.synth"
+import "presets/orchestra.synth"
+import "presets/bass.synth"
+import "presets/drums.synth"
+import "presets/sfx.synth"
+
+synth supersaw {
+  poly 12 steal oldest spread 80%
+  gain -11db
+  param cutoff: hz = 3000 range 200..9000 smooth 20ms curve log
+  voice {
+    let osc = saw(freq: note, unison: 7, spread: 18ct, width: 0.85, gain: 0.35)
+    let amp = adsr(attack: 15ms, decay: 300ms, sustain: 0.8, release: 400ms)
+    out lowpass(osc, cutoff: cutoff, q: 0.25, slope: 24db) * amp * velocity
+  }
+  bus {
+    chorus(voices: 3, depth: 35%, rate: 0.5hz, mix: 30%)
+    reverb(size: 0.7, decay: 1.8s, damp: 5khz, predelay: 15ms, mix: 18%)
+    widen(amount: 45%)
+  }
+}
+
+synth arp_pluck {
+  poly 8 steal oldest spread 50%
+  gain -10db
+  kill after 2s
+  voice {
+    let osc = saw(freq: note, unison: 3, spread: 8ct, width: 0.6, gain: 0.4)
+    let amp = env { 1 -> 0.3 in 60ms curve exp -> 0 in 180ms }
+    out lowpass(osc, cutoff: 3500, q: 0.4, slope: 24db) * amp * velocity
+  }
+  bus {
+    delay_fx(time: 3/8beat, feedback: 35%, mix: 22%, pingpong: true, damp: 5khz)
+    widen(amount: 35%)
+  }
+}
+
+master {
+  bus_gain -1db
+  compressor(threshold: -17db, ratio: 2.5, attack: 12ms, release: 200ms, makeup: auto)
+  limiter(ceiling: -1db, lookahead: 5ms, release: 80ms)
+}

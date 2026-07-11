@@ -1,0 +1,17 @@
+# Pomar - tema silly de vila (Stardew Valley + Animal Crossing + Wii).
+# Motivo derivado do recorded.mp3 do dono: aproximacoes cromaticas + salto
+# alegre + resposta descendo, ~124bpm. Marimba fisica no tema, music box na
+# ponte, assobio (apito) respondendo, epiano de cama e baixo saltitante.
+import "presets/keys.synth"
+import "presets/physical.synth"
+import "presets/bass.synth"
+import "presets/drums.synth"
+import "presets/pads.synth"
+import "presets/funk.synth"
+import "presets/sfx.synth"
+
+master {
+  bus_gain 2db
+  compressor(threshold: -17db, ratio: 2.2, attack: 12ms, release: 200ms, makeup: auto)
+  limiter(ceiling: -1db, lookahead: 5ms, release: 80ms)
+}

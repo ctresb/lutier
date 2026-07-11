@@ -1,0 +1,200 @@
+# "daynight cycle" - 103s video: dia 0-15s, noite 15-86s, amanhecer 87s+
+# 96bpm: dia_intro 24 beats=15s; noite 112 beats=70s; amanhecer começa no beat 136 (~85s)
+tempo 96
+
+track pad pad_dark
+automate cutoff 0 1900 -> 24 520 curve exp -> 112 620 -> 136 900 curve log -> 160 2600 curve log
+track glass pad_glass
+automate morph 0 20% -> 24 65% curve exp -> 136 55% -> 160 15% curve exp
+track ris dawn_riser
+automate cutoff 132 500 -> 148 7200 curve log -> 164 3200 curve exp
+automate bright 132 0.05 -> 148 0.92 curve log -> 164 0.35 curve exp
+track kal kalimba
+swing 56
+humanize 8ms 10%
+track ep epiano_fm
+humanize 7ms 8%
+track hp harp
+humanize 8ms 10%
+track fl flute_lead
+humanize 10ms 8%
+track sb subbass
+set drv 0.22
+track shk shaker
+swing 56
+track ht hat_closed
+swing 56
+track bell night_ping
+humanize 12ms 12%
+track kick kick_deep
+
+section day_intro 24
+  track ep epiano_fm
+  0  [g3 b3 d4] 4 0.42
+  4  [d3 f#3 a3] 4 0.38
+  8  [e3 g3 b3] 4 0.42
+  12 [c3 e3 g3] 4 0.38
+  16 [g3 b3 d4] 4 0.42
+  20 [d3 f#3 a3] 4 0.36
+  track kal kalimba
+  0  b4 0.5 0.55
+  1  d5 0.5 0.50
+  2  g4 1.0 0.54
+  4  a4 0.5 0.48
+  5  b4 0.5 0.52
+  6  d5 1.0 0.50
+  8  b4 0.5 0.55
+  9  d5 0.5 0.50
+  10 e5 1.0 0.56
+  12 d5 0.5 0.50
+  13 b4 0.5 0.48
+  14 g4 2.0 0.54
+  16 b4 0.5 0.52
+  18 d5 0.5 0.48
+  20 a4 1.0 0.45
+  22 f#4 1.5 0.42
+  track sb subbass
+  0 g1 3.5 0.42
+  8 e2 3.5 0.38
+  16 c2 3.5 0.36
+  track shk shaker
+  0.5 c5 0.12 0.30 x12 @2
+
+section night_chill 112
+  track pad pad_dark
+  0  [e2 b2 f#3] 16 0.42
+  16 [c3 g3 d4] 16 0.38
+  32 [a2 e3 b3] 16 0.40
+  48 [d3 a3 e4] 16 0.38
+  64 [e2 b2 f#3] 16 0.42
+  80 [c3 g3 d4] 16 0.38
+  96 [a2 e3 b3] 16 0.40
+  track glass pad_glass
+  8  [e4 b4 f#5] 12 0.18
+  28 [c4 g4 d5] 12 0.16
+  48 [a3 e4 b4] 12 0.17
+  72 [d4 a4 e5] 12 0.15
+  96 [e4 b4 f#5] 12 0.16
+  track bell night_ping
+  0 b5 0.2 0.28
+  7 f#6 0.2 0.20
+  16 g5 0.2 0.24
+  25 d6 0.2 0.18
+  36 e6 0.2 0.24
+  44 b5 0.2 0.18
+  56 a5 0.2 0.22
+  64 e6 0.2 0.20
+  76 d6 0.2 0.20
+  88 f#6 0.2 0.18
+  104 b5 0.2 0.20
+  track sb subbass
+  0 e1 6 0.30
+  16 c2 6 0.28
+  32 a1 6 0.28
+  48 d2 6 0.26
+  64 e1 6 0.30
+  80 c2 6 0.28
+  96 a1 6 0.26
+  track hp harp
+  12 b3 0.5 0.24
+  13 f#4 0.5 0.20
+  14 b4 1.5 0.22
+  40 e4 0.5 0.24
+  41 b4 0.5 0.20
+  42 f#5 1.5 0.22
+  68 c4 0.5 0.22
+  69 g4 0.5 0.18
+  70 d5 1.5 0.20
+  100 a3 0.5 0.22
+  101 e4 0.5 0.18
+  102 b4 1.5 0.20
+
+section dawn_rise 16
+  track ris dawn_riser
+  0 g4 14 0.72
+  4 d5 10 0.48
+  8 b5 7 0.34
+  track pad pad_dark
+  0 [c3 g3 d4] 8 0.42
+  8 [g3 b3 d4] 8 0.40
+  track glass pad_glass
+  0 [c4 g4 d5] 8 0.22
+  8 [g4 b4 d5] 8 0.26
+  track hp harp
+  0 c4 0.5 0.32
+  1 g4 0.5 0.28
+  2 d5 0.5 0.30
+  3 g5 0.5 0.32
+  4 b4 0.5 0.32
+  5 d5 0.5 0.34
+  6 g5 0.5 0.36
+  7 b5 0.5 0.38
+  8 d5 0.5 0.36
+  9 g5 0.5 0.38
+  10 b5 0.5 0.40
+  11 d6 0.5 0.42
+  12 g5 0.5 0.42
+  13 b5 0.5 0.44
+  14 d6 1.0 0.46
+  track fl flute_lead
+  8 d5 1.5 0.44
+  10 e5 1.0 0.42
+  12 g5 2.5 0.48
+  track sb subbass
+  0 c2 4 0.32
+  8 g1 4 0.30
+
+section morning 32
+  track ep epiano_fm
+  0  [g3 b3 d4] 4 0.50 x2 @16
+  4  [d3 f#3 a3] 4 0.44 x2 @16
+  8  [e3 g3 b3] 4 0.50 x2 @16
+  12 [c3 e3 g3] 4 0.46 x2 @16
+  track kal kalimba
+  0 b4 0.5 0.66
+  1 d5 0.5 0.60
+  2 g5 1.0 0.64
+  4 f#5 0.5 0.58
+  5 e5 0.5 0.56
+  6 d5 1.0 0.58
+  8 b4 0.5 0.64
+  9 d5 0.5 0.58
+  10 e5 1.0 0.62
+  12 g5 0.5 0.68
+  13 a5 0.5 0.62
+  14 b5 1.5 0.66
+  16 d5 0.5 0.62
+  17 b4 0.5 0.58
+  18 g4 1.0 0.60
+  20 a4 0.5 0.56
+  21 b4 0.5 0.58
+  22 d5 1.0 0.62
+  24 g5 0.5 0.66
+  25 e5 0.5 0.60
+  26 d5 1.0 0.58
+  28 b4 0.5 0.56
+  29 d5 0.5 0.58
+  30 g4 2.0 0.62
+  track fl flute_lead
+  8 g5 1.5 0.42
+  10 a5 1.0 0.40
+  12 b5 2.0 0.44
+  24 d6 1.0 0.40
+  26 b5 1.0 0.38
+  28 g5 2.5 0.40
+  track hp harp
+  0 g3 0.5 0.38 x8 @4
+  1 b3 0.5 0.32 x8 @4
+  2 d4 0.5 0.36 x8 @4
+  3 b3 0.5 0.30 x8 @4
+  track sb subbass
+  0 g1 3.5 0.48 x2 @16
+  4 d2 3.5 0.42 x2 @16
+  8 e2 3.5 0.46 x2 @16
+  12 c2 3.5 0.42 x2 @16
+  track shk shaker
+  0.5 c5 0.12 0.34 x32 @1
+  track ht hat_closed
+  0 c5 0.10 0.22 x16 @2
+
+arrange day_intro night_chill dawn_rise morning

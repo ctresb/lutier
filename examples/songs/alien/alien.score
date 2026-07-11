@@ -1,0 +1,123 @@
+# Alien @ 66bpm - tons inteiros (c d e f# g# a#), acordes quintais sem terca.
+# Forma: chegada (16) -> sinal (32) -> contato (32, climax) -> partida (16). 96 beats.
+tempo 66
+
+track pg pad_glass
+automate morph 0 0.1 -> 48 0.85 -> 96 0.2 curve lin
+
+section chegada 16
+  track sb subbass
+  0 c1 16 0.55
+
+  track pg pad_glass
+  0 [c3 g3 d4] 16 0.42
+
+  track bm bell_modal
+  2  c5 1 0.4
+  7  f#5 1 0.35
+  12 d5 1 0.4
+
+  track rn sfx_riser_noise
+  12 c4 4 0.5
+
+section sinal 32
+  track sb subbass
+  0  c1 8 0.55
+  8  a#1 8 0.5
+  16 g#1 8 0.5
+  24 c1 8 0.6
+
+  track pg pad_glass
+  0  [c3 g3 d4] 8 0.45
+  8  [a#2 f3 c4] 8 0.45
+  16 [g#2 d#3 a#3] 8 0.45
+  24 [c3 g3 d4] 8 0.5
+
+  # motivo: pergunta sobe e fica suspensa no f#, resposta desce e resolve em c
+  track th theremin_alien
+  4    c5 2 0.55
+  6    d5 1.5 0.55
+  7.5  f#5 4 0.6
+  16   c5 2 0.55
+  18   d5 1.5 0.55
+  19.5 g#5 3 0.6
+  24   f#5 2 0.55
+  26   d5 2 0.5
+  28   c5 4 0.5
+
+  track pu pulsar
+  8  c6 4 0.5
+  22 d6 3 0.45
+
+  track bm bell_modal
+  11.5 f#5 1 0.35
+  23   g#5 1 0.35
+
+  track ri sfx_riser
+  28 c3 4 0.65
+
+section contato 32
+  track im sfx_impact
+  0 c2 2 0.85
+
+  track sb subbass
+  0  c1 8 0.45
+  8  g#1 8 0.4
+  16 f#1 8 0.4
+  24 c1 8 0.45
+
+  track pd pad_dark
+  0  [c3 g3 d4] 8 0.55
+  8  [g#2 d#3 a#3] 8 0.55
+  16 [f#2 c#3 g#3] 8 0.55
+  24 [c3 g3 d4] 8 0.6
+
+  track pg pad_glass
+  0  [c4 g4 d5] 8 0.7
+  8  [g#3 d#4 a#4] 8 0.7
+  16 [f#3 c#4 g#4] 8 0.7
+  24 [c4 g4 d5] 8 0.75
+
+  # batimento cardiaco lento da nave
+  track tm tom_modal
+  0 c3 0.5 0.5 x16 @2
+
+  # climax: motivo aumentado, pico unico em c6 no beat 8
+  track th theremin_alien
+  0  g#5 2 0.75
+  2  a#5 2 0.75
+  4  c6 6 0.9
+  12 a#5 2 0.7
+  14 f#5 4 0.7
+  20 d5 2 0.65
+  22 f#5 2 0.65
+  24 c5 6 0.7
+
+  track bm bell_modal
+  4  c6 1 0.6
+  12 a#5 1 0.5
+  20 d5 1 0.5
+
+  track pu pulsar
+  8  c6 4 0.55
+  16 e6 4 0.55
+  24 d6 4 0.5
+
+  track dl sfx_downlifter
+  28 c4 4 0.5
+
+section partida 16
+  track sb subbass
+  0 c1 12 0.5
+
+  track pg pad_glass
+  0 [c3 g3 d4] 14 0.4
+
+  track th theremin_alien
+  2 c5 6 0.4
+
+  track bm bell_modal
+  6  d5 1 0.35
+  11 [c5 g5] 2 0.45
+
+arrange chegada sinal contato partida

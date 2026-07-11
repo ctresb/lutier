@@ -1,0 +1,93 @@
+# Tamborzao 3-3-2 @ 130bpm. Compasso de 2 beats; kicks em 0 / 0.75 / 1.5.
+tempo 130
+
+section base 8
+  track k kick_tamborzao
+  0    c2 0.4 0.95
+  0.75 c2 0.4 0.8
+  1.5  c2 0.4 0.9  x4 @2
+  2.75 c2 0.4 0.8
+  4.75 c2 0.4 0.8
+  6.75 c2 0.4 0.8
+
+  track s snare_seca
+  1 c4 0.3 0.85 x4 @2
+
+  track t tamborim
+  humanize 4ms 5%
+  0.5  c5 0.2 0.6
+  1.25 c5 0.2 0.5
+  1.75 c5 0.2 0.7
+  2.5  c5 0.2 0.6
+  3.25 c5 0.2 0.5
+  3.75 c5 0.2 0.7
+  4.5  c5 0.2 0.6
+  5.25 c5 0.2 0.5
+  5.75 c5 0.2 0.7
+  6.5  c5 0.2 0.6
+  7.25 c5 0.2 0.5
+  7.75 c5 0.2 0.7
+
+  track b bass_808
+  0    c2 0.75 0.9
+  0.75 eb2 0.75 0.8
+  1.5  g1 2.5 0.85
+  4    c2 0.75 0.9
+  4.75 f1 0.75 0.8
+  5.5  g1 2.5 0.85
+
+  track h hat_trap
+  0 c5 0.2 0.5 x16 @0.5
+
+section cheio 8
+  track k kick_tamborzao
+  0    c2 0.4 0.95
+  0.75 c2 0.4 0.8
+  1.5  c2 0.4 0.9  x4 @2
+  2.75 c2 0.4 0.8
+  4.75 c2 0.4 0.8
+  6.75 c2 0.4 0.8
+
+  track s snare_seca
+  1 c4 0.3 0.85 x4 @2
+
+  track t tamborim
+  0.5  c5 0.2 0.6
+  1.25 c5 0.2 0.5
+  1.75 c5 0.2 0.7
+  2.5  c5 0.2 0.6
+  3.25 c5 0.2 0.5
+  3.75 c5 0.2 0.7
+  4.5  c5 0.2 0.6
+  5.25 c5 0.2 0.5
+  5.75 c5 0.2 0.7
+  6.5  c5 0.2 0.6
+  7.25 c5 0.2 0.5
+  7.75 c5 0.2 0.7
+
+  track b bass_808
+  0    c2 0.75 0.9
+  0.75 eb2 0.75 0.8
+  1.5  g1 2.5 0.85
+  4    c2 0.75 0.9
+  4.75 f1 0.75 0.8
+  5.5  g1 2.5 0.85
+
+  track st stab_funk
+  2 [c4 eb4 g4] 0.5 0.8
+  6 [bb3 d4 f4] 0.5 0.8
+
+  track a apito
+  3.5 c6 0.5 0.7
+  7.5 e6 1 0.7
+
+  track cl clap_funk
+  3 c4 0.3 0.85
+  7 c4 0.3 0.85
+
+  track h hat_trap
+  0 c5 0.2 0.5 x16 @0.5
+  3.5 c5 0.1 0.4 x4 @0.125
+  7.5 c5 0.1 0.4 x4 @0.125
+
+arrange base cheio cheio base

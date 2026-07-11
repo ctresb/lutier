@@ -1,0 +1,28 @@
+# "ui pulse" - trilha curta para navegação de interface/debug
+import "presets/pads.synth"
+import "presets/keys.synth"
+import "presets/bass.synth"
+import "presets/drums.synth"
+import "presets/sfx.synth"
+
+synth soft_tick {
+  poly 6 steal oldest spread 20%
+  gain -18db
+  kill after 700ms
+  voice {
+    let click = noise(color: blue, density: 0.35)
+    let tone = sine(freq: note, gain: 0.25)
+    let amp = env { 1 -> 0.25 in 12ms curve exp -> 0 in 90ms curve exp }
+    out highpass(click * 0.25 + tone, cutoff: 1800, q: 0.2, slope: 12db) * amp * velocity
+  }
+  bus {
+    delay_fx(time: 1/8beat, feedback: 18%, mix: 12%, pingpong: true, damp: 7khz)
+    widen(amount: 25%)
+  }
+}
+
+master {
+  bus_gain -4db
+  compressor(threshold: -18db, ratio: 2.2, attack: 18ms, release: 180ms, makeup: auto)
+  limiter(ceiling: -1db, lookahead: 5ms, release: 70ms)
+}

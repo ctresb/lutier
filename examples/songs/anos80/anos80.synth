@@ -1,0 +1,72 @@
+# "Nunca Desisto" - synthpop dancante anos 80 (original, homenagem a estetica
+# da epoca): baixo FM em colcheias, gated snare, teclas DX7, stabs de metal
+# sintetico, lead brilhante. 113bpm.
+import "presets/keys.synth"
+import "presets/pads.synth"
+import "presets/bass.synth"
+import "presets/drums.synth"
+import "presets/orchestra.synth"
+
+# Baixo FM anos 80: fundamental firme + brilho FM que morde no ataque
+synth bass_fm80 {
+  poly 2 steal oldest
+  gain -8db
+  kill after 1s
+
+  voice {
+    let idx = env { 1 -> 0.15 in 90ms curve exp }
+    let m = sine(freq: hz(note) * 2, gain: 1)
+    let tone = sine(freq: note, fm: m * idx * 4, gain: 0.8)
+             + sine(freq: note - 12st, gain: 0.25)
+    let amp = env { 0 -> 1 in 3ms curve lin -> 0.6 in 150ms curve exp
+                    sustain 0.6 release -> 0 in 60ms curve exp }
+    out saturate(tone, amount: 0.25) * amp * velocity
+  }
+}
+
+# Snare com gated reverb (a assinatura dos anos 80): corpo + wash que CORTA
+synth snare_gated {
+  poly 2 steal oldest
+  gain -4db
+  kill after 1s
+
+  voice {
+    let shell = sine(freq: env { 330hz -> 180hz in 35ms curve exp })
+              * env { 1 -> 0 in 130ms curve exp }
+    let wires = highpass(noise(gain: 1.1), cutoff: 2khz, q: 0.3)
+              * env { 1 -> 0 in 160ms curve exp }
+    # o "gate": cauda de ruido grande que morre ABRUPTA em 120ms
+    let gate_wash = bandpass(noise(gain: 1.6), cutoff: 1.2khz, q: 0.3)
+                  * env { 0 -> 0.8 in 10ms curve lin -> 0.55 in 110ms curve lin -> 0 in 18ms curve lin }
+    out (shell * 0.8 + wires + gate_wash) * velocity
+  }
+
+  bus {
+    widen(amount: 35%)
+  }
+}
+
+# Stab de metais sintetico (aquele hit de acorde curto)
+synth stab80 {
+  poly 6 steal oldest
+  gain -7db
+  kill after 1.2s
+
+  voice {
+    let osc = saw(freq: note, unison: 3, spread: 12ct, width: 0.6, gain: 0.35)
+            + pulse(freq: note + 12st, width: 30%, gain: 0.12)
+    let tone = lowpass(osc, cutoff: env { 5khz -> 900hz in 220ms curve exp }, q: 0.4)
+    out tone * env { 1 -> 0 in 300ms curve exp } * velocity
+  }
+
+  bus {
+    widen(amount: 40%)
+    reverb(size: 0.5, decay: 700ms, damp: 4khz, mix: 14%)
+  }
+}
+
+master {
+  bus_gain 0db
+  compressor(threshold: -16db, ratio: 2.8, attack: 10ms, release: 160ms, makeup: auto)
+  limiter(ceiling: -1db, lookahead: 5ms, release: 70ms)
+}
