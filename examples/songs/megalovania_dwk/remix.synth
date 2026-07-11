@@ -1,0 +1,15 @@
+# "do i wanna lovania" - remix: melodia de Megalovania (a.mid)
+# sobre a atmosfera / progressao / andamento de Do I Wanna Know (b.mid).
+# Sol menor do original -> re menor (tom da melodia); 88bpm do original B.
+import "presets/pads.synth"      # pad_dark, choir_vox
+import "presets/keys.synth"      # lead_saw
+import "presets/bass.synth"      # subbass, bass_deep
+import "presets/drums.synth"     # kick_deep, hat_closed
+import "presets/funk.synth"      # clap_funk, snare_seca
+import "presets/sfx.synth"       # sfx_riser_tonal, sfx_sub_drop
+
+master {
+  bus_gain -1db
+  compressor(threshold: -17db, ratio: 3, attack: 8ms, release: 180ms, makeup: auto)
+  limiter(ceiling: -1db, lookahead: 5ms, release: 80ms)
+}
