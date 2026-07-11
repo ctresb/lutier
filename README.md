@@ -77,7 +77,7 @@ master {
 | `poly`, `mono`, `gain`, `kill after` | Controlam vozes, ganho e fim de nota. |
 | `param` | Expõe parâmetros para `set` e `automate` no score. |
 | `global` | Calcula sinal compartilhado entre vozes. |
-| `voice` | Calcula sinal por nota, com `note`, `velocity`, `gate`, `time`, `rand`, `voice_idx`. |
+| `voice` | Calcula sinal por nota, com `note`, `velocity`, `gate`, `time`, `dur`, `rand`, `voice_idx`. `dur` é a duração agendada da nota em segundos: `env { 0 -> 1 in dur }` faz a rampa ocupar a nota inteira (risers exatos). |
 | `bus` | Processa a soma das vozes. Bom lugar para chorus, delay, reverb, widen e duck. |
 | `mod` | Matriz de modulação para targets internos. |
 | `master` | Processamento final do render. |
@@ -138,8 +138,10 @@ Instrumentos prontos em `presets/`, importáveis com `import "presets/<nome>.syn
 | `orchestra.synth` | `strings_stacc`, `brass_stab`, `horn_sustain`, `flute_lead`, `organ_church`. |
 | `bass.synth` | `subbass`, `bass_deep`, `bass_pulse`. |
 | `drums.synth` | `taiko`, `kick_deep`, `snare`, `hat_closed`, `hat_open`, `shaker`, `tom_modal`. |
-| `physical.synth` | Instrumentos por modelagem física: `violino`, `cello`, `flauta`, `clarinete`, `sino_real`, `marimba_fisica`. |
-| `sfx.synth` | SFX de jogo: UI, moeda, sino, pulo, powerup, laser, hit, whoosh, portal, riser, alarme e explosão. |
+| `funk.synth` | Funk carioca/trap: `kick_808`, `bass_808` (glide), `kick_tamborzao`, `tamborim`, `atabaque`, `clap_funk`, `snare_seca`, `hat_trap`, `stab_funk`, `apito`. |
+| `nature.synth` | Ambiências procedurais: `vento`, `chuva`, `oceano`, `riacho`, `trovao`, `fogueira`, `grilos`, `sapos`, `passaros`. |
+| `physical.synth` | Instrumentos por modelagem física: `violino`, `cello`, `flauta`, `flauta_doce`, `clarinete`, `sino_real`, `marimba_fisica`, metais e corais. |
+| `sfx.synth` | SFX de jogo: UI, moeda, sino, pulo, powerup, laser, hit, whoosh, portal, alarme, explosão e armas. Transições que escalam com a duração da nota: `sfx_riser`, `sfx_riser_tonal`, `sfx_riser_noise`, `sfx_shepard`, `sfx_downlifter`, `sfx_sub_drop`, `sfx_impact`. |
 
 ## Exemplos
 
@@ -147,9 +149,10 @@ Tudo em `examples/`, separado do código da engine:
 
 | Pasta | Conteúdo |
 |---|---|
-| `examples/songs/<nome>/` | 5 músicas completas: `vila`, `lamento`, `epic`, `funky`, `infortunata`. Cada pasta tem o par `.synth` + `.score` e o `.mp3` renderizado. |
+| `examples/songs/<nome>/` | Músicas completas: `vila`, `lamento`, `epic`, `funky`, `infortunata`, `tamborzao`. Cada pasta tem o par `.synth` + `.score` e o `.mp3` renderizado. |
 | `examples/sfx/` | Showcase com todos os SFX de jogo (`showcase.synth` + `showcase.score` + `showcase.mp3`). |
 | `examples/sfx/oneshots/` | Cada SFX renderizado individualmente em `.mp3`. |
+| `examples/ambience/` | Vitrine dos sons da natureza (`natureza.synth` + `natureza.score` + `natureza.mp3`). |
 
 Os `.mp3` de cada exemplo já estão versionados ao lado dos fontes. Para re-renderizar qualquer um:
 
