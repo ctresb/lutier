@@ -3,3 +3,7 @@
 HANDOFF.md
 .DS_Store
 tests/golden/*.fp
+/*.mid
+/*.mp3
+examples/**/*.wav
+examples/songs/tomodachi_lobby/old/
