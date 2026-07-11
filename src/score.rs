@@ -1,7 +1,7 @@
 // .score parsing: tempo map, sections, swing, humanize, automation.
 #[derive(Debug, Clone)]
 pub enum Ev {
-    On(f64, f64),  // note, vel
+    On(f64, f64, f64), // note, vel, dur_s (scheduled length; voices read it as `dur`)
     Off(f64),
     Param(String, f64),
     Bpm(f64),
@@ -447,10 +447,11 @@ pub fn parse_score(src: &str, sr: f64) -> Result<(f64, Vec<Track>), String> {
         let vel = (ev.vel * (1.0 + v_jit)).clamp(0.0, 1.0);
         let t0 = (tmap.time_of_beat(beat) + t_jit).max(0.0);
         let t1 = tmap.time_of_beat(beat + ev.dur) + t_jit;
+        let dur_s = t1.max(t0 + 0.001) - t0;
         for &n in &ev.notes {
             tracks[ev.track]
                 .events
-                .push(TimedEv { sample: (t0 * sr) as u64, ev: Ev::On(n, vel) });
+                .push(TimedEv { sample: (t0 * sr) as u64, ev: Ev::On(n, vel, dur_s) });
             tracks[ev.track]
                 .events
                 .push(TimedEv { sample: (t1.max(t0 + 0.001) * sr) as u64, ev: Ev::Off(n) });

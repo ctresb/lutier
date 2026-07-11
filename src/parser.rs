@@ -170,6 +170,7 @@ pub enum BuiltinVar {
     Velocity,
     Gate,
     Time,
+    Dur,
     Rand,
     VoiceIdx,
 }

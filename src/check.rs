@@ -3,7 +3,7 @@
 use crate::parser::{Expr, MasterDef, ParsedFile, SynthDef, Unit};
 use std::collections::{HashMap, HashSet};
 
-const BUILTIN_NAMES: &[&str] = &["note", "velocity", "gate", "time", "rand", "voice_idx"];
+const BUILTIN_NAMES: &[&str] = &["note", "velocity", "gate", "time", "dur", "rand", "voice_idx"];
 
 const OSC_NO_FM: &[&str] = &["saw", "square", "pulse", "noise"];
 

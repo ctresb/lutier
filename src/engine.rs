@@ -45,13 +45,6 @@ impl Val {
             v => v.num(),
         }
     }
-    fn as_ms(self) -> f64 {
-        match self {
-            Val::Ms(v) => v,
-            Val::S(v) => v * 1000.0, // bare scalars in time position = seconds
-            v => v.num(),
-        }
-    }
 }
 
 fn binop(op: char, a: Val, b: Val) -> Val {
@@ -194,26 +187,16 @@ enum NodeState {
         lp2: f64,
     },
     Hall(Box<HallState>),
-    // brass: lip valve (2nd-order resonator) + Bernoulli flow + bore waveguide
-    // + bell reflection/radiation filters + in-loop level-dependent waveshaper
-    Brass {
-        bore: Vec<f64>,
-        w: usize,
-        lip1: f64,     // lip resonator states
-        lip2: f64,
-        lp: f64,       // bell reflection lowpass
-        dc: (f64, f64),
-        env: f64,      // local rms-ish follower for brassiness
-        rng: u64,
-        nlp: f64,
-    },
+    // brass: lip valve (2nd-order resonator) + bore waveguide + steepening
+    // nao-linear distribuido + bell reflection/radiation
+    Brass(Box<BrassS>),
     Voz { singers: Vec<VozSinger> },
-    // flute: jet delay + bore delay, cubic jet nonlinearity
-    Flute { bore: Vec<f64>, jet: Vec<f64>, w: usize, lp: f64, dc: (f64, f64), rng: u64 },
-    // clarinet: reed reflection table + closed bore (odd harmonics)
-    Reed { bore: Vec<f64>, w: usize, lp: f64, rng: u64 },
-    // breath source: DC pressure + filtered turbulence noise
-    Breath { rng: u64, lp: f64 },
+    // flute: jet delay + bore delay, smooth cubic jet nonlinearity
+    Flute(Box<FluteS>),
+    // clarinet: Bernoulli reed flow + closed bore (odd harmonics)
+    Reed(Box<ReedS>),
+    // breath source: DC pressure + physical turbulence
+    Breath { rng: u64, turb: TurbState },
     Grain { grains: Vec<GrainVoice>, rng: u64, next_spawn: f64 },
 }
 
@@ -270,6 +253,40 @@ struct HallState {
     p_in: Vec<[f64; 6]>,     // scratch: incoming waves per node
 }
 
+struct BrassS {
+    bore: Vec<f64>,
+    w: usize,
+    lip1: f64, // estados do ressonador do labio
+    lip2: f64,
+    lp: f64, // lowpass da reflexao da campana
+    dc: (f64, f64),
+    ap: (f64, f64), // allpass modulado do steepening (x1, y1)
+    rng: u64,
+    turb: TurbState,
+    prev_out: f64,
+}
+
+struct ReedS {
+    bore: Vec<f64>,
+    w: usize,
+    lp: f64,       // polo do cutoff de toneholes na reflexao
+    oz: f64,       // one-zero da reflexao (x anterior)
+    rng: u64,
+    turb: TurbState,
+    prev_out: f64, // diferenciador de radiacao
+}
+
+struct FluteS {
+    bore: Vec<f64>,
+    jet: Vec<f64>,
+    w: usize,
+    lp: f64,        // polo do filtro de reflexao
+    dc: (f64, f64), // DC blocker pos-nao-linearidade
+    rng: u64,
+    turb: TurbState,
+    prev_out: f64, // saida anterior do bore (diferenciador de radiacao)
+}
+
 #[derive(Clone)]
 struct VozSinger {
     ph: f64,      // glottal phase 0..1
@@ -283,6 +300,7 @@ struct VozSinger {
     s1: [f64; 4], // formant resonator states
     s2: [f64; 4],
     gprev: f64,   // previous glottal sample (flow derivative)
+    asp: f64,     // lowpass da aspiracao (tilt -6db/oct)
     fsc: f64,     // personal formant scale (vocal tract length)
     pan: f64,
     onset: f64,   // personal attack offset s
@@ -388,6 +406,70 @@ fn xorshift(s: &mut u64) -> f64 {
     (x >> 11) as f64 / (1u64 << 52) as f64 * 2.0 - 1.0
 }
 
+fn smoothstep(a: f64, b: f64, x: f64) -> f64 {
+    let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// Turbulencia de sopro (fonte unica de flute/reed/brass/breath/voz).
+/// Fisica: o ruido de sopro real e um dipolo cuja amplitude escala com U^2
+/// (Verge/Fabre), so existe acima da transicao de Reynolds (sem fluxo = sem
+/// ruido, sem piso), tem espectro em corcova (pico de Strouhal ~1..3khz
+/// seguindo o fluxo) com rolloff forte acima - a oitava 5..15khz de ruido
+/// branco e exatamente o percepto de "chiado de fita" - e NAO e estacionario:
+/// o suporte do sopro deriva em ~centenas de ms e o jato tem intermitencia
+/// em ~dezenas de ms (duas camadas Ornstein-Uhlenbeck).
+/// O chamador injeta o resultado NO LOOP (junction/fluxo), nunca soma na
+/// saida: dentro do loop o ruido ganha o pente harmonico do tubo e a
+/// nao-linearidade o pulsa na taxa do ciclo (pitch-sincrono de graca).
+#[derive(Clone, Default)]
+struct TurbState {
+    svf_lo: f64,
+    svf_bp: f64,
+    tilt: f64,
+    ou_s: f64,  // wander lento (suporte do sopro), alvo/estado
+    ou_st: f64,
+    ou_f: f64,  // wander rapido (intermitencia do jato)
+    ou_ft: f64,
+}
+
+impl TurbState {
+    /// uj: velocidade de jato normalizada (~sqrt(pressao), ~1.0 em mf)
+    #[inline]
+    fn tick(&mut self, rng: &mut u64, uj: f64, sr: f64) -> f64 {
+        let dt = 1.0 / sr;
+        // wander OU por retarget aleatorio + smoothing (como o jitter de voz)
+        if xorshift(rng) * 0.5 + 0.5 < 3.0 * dt {
+            self.ou_st = xorshift(rng) * 0.30;
+        }
+        self.ou_s += onepole_k(1.2, sr) * (self.ou_st - self.ou_s);
+        if xorshift(rng) * 0.5 + 0.5 < 24.0 * dt {
+            self.ou_ft = xorshift(rng) * 0.15;
+        }
+        self.ou_f += onepole_k(9.0, sr) * (self.ou_ft - self.ou_f);
+        let wander = (1.0 + self.ou_s + self.ou_f).max(0.0);
+        // gate de Reynolds: nasce suave a partir de uj~0.28
+        let gate = smoothstep(0.28, 0.55, uj);
+        if gate <= 0.0 {
+            // fluxo parado: estado decai, saida zero (silencio de verdade)
+            self.svf_bp = flush_denorm(self.svf_bp * 0.999);
+            self.tilt = flush_denorm(self.tilt * 0.999);
+            return 0.0;
+        }
+        // corcova de Strouhal: fc segue o fluxo (pp escuro, ff mais claro)
+        let fc = (800.0 + 1700.0 * uj.min(1.6)).clamp(500.0, 3400.0);
+        let f = 2.0 * (std::f64::consts::PI * fc / sr).sin();
+        let white = xorshift(rng);
+        self.svf_lo = flush_denorm(self.svf_lo + f * self.svf_bp);
+        let hi = white - self.svf_lo - 1.25 * self.svf_bp; // Q ~0.8 (largo)
+        self.svf_bp = flush_denorm(self.svf_bp + f * hi);
+        // tilt: mais -6db/oct acima de ~3.5khz mata a regiao "fita"
+        let kt = onepole_k(3500.0, sr);
+        self.tilt = flush_denorm(self.tilt + kt * (self.svf_bp - self.tilt));
+        self.tilt * uj * uj * gate * wander
+    }
+}
+
 fn poly_blep(t: f64, dt: f64) -> f64 {
     if t < dt {
         let x = t / dt;
@@ -480,6 +562,8 @@ pub struct Ctx<'a> {
     pub time: f64,
     pub rand: f64,
     pub vidx: f64,
+    /// scheduled note duration in seconds (0 when unknown: live/one-shot contexts)
+    pub dur: f64,
     pub state: &'a mut StateStore,
     /// this-sample let values, slot-indexed by resolve (voice or global scope)
     pub cur: &'a [Val],
@@ -614,6 +698,7 @@ pub fn eval(e: &Expr, ctx: &mut Ctx) -> Val {
             crate::parser::BuiltinVar::Velocity => Val::S(ctx.vel),
             crate::parser::BuiltinVar::Gate => Val::S(ctx.gate),
             crate::parser::BuiltinVar::Time => Val::S(ctx.time),
+            crate::parser::BuiltinVar::Dur => Val::S(ctx.dur),
             crate::parser::BuiltinVar::Rand => Val::S(ctx.rand),
             crate::parser::BuiltinVar::VoiceIdx => Val::S(ctx.vidx),
         },
@@ -636,6 +721,7 @@ pub fn eval(e: &Expr, ctx: &mut Ctx) -> Val {
                 "velocity" => Val::S(ctx.vel),
                 "gate" => Val::S(ctx.gate),
                 "time" => Val::S(ctx.time),
+                "dur" => Val::S(ctx.dur),
                 "rand" => Val::S(ctx.rand),
                 "voice_idx" => Val::S(ctx.vidx),
                 _ => Val::S(0.0),
@@ -653,7 +739,7 @@ pub fn eval(e: &Expr, ctx: &mut Ctx) -> Val {
                     }
                     EnvSegR {
                         target: if matches!(tv, Val::Pitch(_)) { tv.as_hz() } else { tv.num() },
-                        time_s: eval(&s.time, ctx).as_ms() / 1000.0,
+                        time_s: eval(&s.time, ctx).as_sec(ctx.bpm),
                         curve: s.curve,
                     }
                 };
@@ -1547,75 +1633,133 @@ fn eval_call(op: Op, args: &[(String, Expr)], id: usize, ctx: &mut Ctx) -> Val {
             }
         }
         Op::Breath => {
-            // breath(pressure, turbulence): DC pressure + lowpassed noise burst,
-            // the excitation source for custom wind designs
+            // breath(pressure, turbulence): pressao DC + turbulencia fisica
+            // (ver TurbState: espectro de Strouhal, escala U^2, gate de
+            // Reynolds, wander nao-estacionario), fonte de excitacao para
+            // designs de sopro custom. pressure 0 = silencio de verdade.
             let pressure = eval_arg(args, "pressure", Val::S(0.8), ctx).num().clamp(0.0, 2.0);
-            let turb = eval_arg(args, "turbulence", Val::S(0.1), ctx).num().clamp(0.0, 1.0);
+            let tamt = eval_arg(args, "turbulence", Val::S(0.1), ctx).num().clamp(0.0, 1.0);
             let nseed = ctx.seed ^ (id as u64).wrapping_mul(0x9E3779B97F4A7C15) | 1;
-            let st = ctx
-                .state
-                .get_or(id, || NodeStateBox(NodeState::Breath { rng: nseed, lp: 0.0 }));
-            if let NodeStateBox(NodeState::Breath { rng, lp }) = st {
-                let k = onepole_k(3000.0, ctx.sr);
-                *lp = flush_denorm(*lp + k * (xorshift(rng) - *lp));
-                Val::S(pressure * (1.0 + turb * *lp * 4.0))
+            let st = ctx.state.get_or(id, || {
+                NodeStateBox(NodeState::Breath { rng: nseed, turb: TurbState::default() })
+            });
+            if let NodeStateBox(NodeState::Breath { rng, turb }) = st {
+                let uj = pressure.max(0.0).sqrt();
+                let n = turb.tick(rng, uj, ctx.sr);
+                Val::S(pressure + tamt * 0.9 * n)
             } else {
                 Val::S(0.0)
             }
         }
         Op::Flute => {
-            // flute: air jet (delay + cubic nonlinearity) exciting an open bore.
-            // pressure ~0.6..1 sounds; overblow with pressure > 1.1.
+            // flute jet-drive waveguide (Cook/STK + Karjalainen/Valimaki,
+            // fisica em Verge 1995 / de la Cuadra 2005): bore de 1.5 periodo
+            // tocado em OVERBLOW no 2o modo (o timbre real de flauta), jato com
+            // delay proprio (jet: ratio do loop, ~0.32) + sigmoide cubica
+            // SUAVIZADA (tanh da cubica: sem o corner do clamp, que soprava
+            // ruido de banda larga proprio), e turbulencia fisica injetada NO
+            // DESLOCAMENTO DO JATO antes da nao-linearidade: o tubo penteia o
+            // ruido em skirts harmonicas e a sigmoide o pulsa a 2xf0 - o sopro
+            // vive dentro da nota em vez de chiar por cima.
+            // pressure ~0.5..1.3 soa (remap interno); brilho sobe com pressure
+            // via fc da reflexao. jet: balanco harmonico (0.2 brilhante/oco ..
+            // 0.45 escuro/cheio).
             let freq = eval_arg(args, "freq", Val::Hz(440.0), ctx).as_hz().clamp(80.0, 4000.0);
             let pressure = eval_arg(args, "pressure", Val::S(0.9), ctx).num().clamp(0.0, 1.6);
             let breath_noise =
                 eval_arg(args, "breath", Val::S(0.05), ctx).num().clamp(0.0, 1.0);
+            let jet_ratio = eval_arg(args, "jet", Val::S(0.32), ctx).num().clamp(0.08, 0.56);
             let g = eval_arg(args, "gain", Val::S(1.0), ctx).num();
-            let cap = (ctx.sr / 40.0) as usize + 8;
+            let cap = (ctx.sr / 24.0) as usize + 8;
             let nseed = ctx.seed ^ (id as u64).wrapping_mul(0x2545F4914F6CDD1D) | 1;
             let st = ctx.state.get_or(id, || {
-                NodeStateBox(NodeState::Flute {
+                NodeStateBox(NodeState::Flute(Box::new(FluteS {
                     bore: vec![0.0; cap],
                     jet: vec![0.0; cap],
                     w: 0,
                     lp: 0.0,
                     dc: (0.0, 0.0),
                     rng: nseed,
-                })
+                    turb: TurbState::default(),
+                    prev_out: 0.0,
+                })))
             });
-            if let NodeStateBox(NodeState::Flute { bore, jet, w, lp, dc, rng }) = st {
+            if let NodeStateBox(NodeState::Flute(s)) = st {
                 let period = ctx.sr / freq;
-                // half-period bore + inverting end reflection = full-period loop
-                let d_bore = (period * 0.5 - 1.25).max(3.0);
-                // jet transit ~ half the acoustic period selects the 1st register
-                let d_jet = d_bore.max(2.0);
-                let bore_out = ring_read(bore, *w, d_bore);
-                // bore reflection: dark lowpass (mode discrimination: higher
-                // modes must see lower loop gain or the jet overblows) + dc block
-                let k = onepole_k(2000.0, ctx.sr);
-                *lp = flush_denorm(*lp + k * (bore_out - *lp));
-                let neg = -*lp; // open-end reflection inverts pressure
-                let dc_out = neg - dc.0 + 0.995 * dc.1;
-                dc.0 = neg;
-                dc.1 = dc_out;
-                let refl = flush_denorm(dc_out);
-                let breath_p = pressure * 0.9 * (1.0 + breath_noise * xorshift(rng));
-                // jet: pressure difference travels the jet delay, then the
-                // cubic sigmoid x - x^3 (clamped) shapes the oscillation
+                // remap interno de pressao: a janela de oscilacao do jato
+                // cubico e estreita (~0.85..1.15 de pressao de boca); o user
+                // controla dinamica em 0.3..1.3 e o remap poe tudo dentro da
+                // janela - a DINAMICA sai do brilho da reflexao + turbulencia,
+                // como numa flauta real (nao do jato morrer)
+                // smoothstep: sobe/desce continuo em 0..0.12 (sem degrau de
+                // pressao no ataque/release = sem clique nem corte seco)
+                let p_eff = (0.72 + 0.36 * pressure) * smoothstep(0.0, 0.12, pressure);
+                // brilho vs dinamica: reflexao mais aberta soprando forte
+                let fc_refl = (1500.0 + 2200.0 * (pressure - 0.85)).clamp(900.0, 3400.0);
+                // fase do filtro de reflexao compensada analiticamente para a
+                // afinacao nao depender de pressure (fc_refl varia com ela)
+                // 0.45: a shelving (72% lp + 28% direto) tem ~metade da fase
+                // de um lowpass puro (medido no sweep de pressao em g4)
+                let tau = 2.0 * std::f64::consts::PI;
+                let refl_delay = 0.45 * (freq / fc_refl).atan() / (tau * freq) * ctx.sr;
+                // bore de 1.5T (afinado uma quinta abaixo) + reflexao invertida:
+                // o jato trava no 2o modo = f. E o overblow do STK: da a
+                // estrutura harmonica de flauta real (tubo aberto), nao a de
+                // tubo fechado do loop de meio periodo.
+                // 1.5187/+1.19: afinacao recalibrada por sweep g3..g5 depois
+                // da reflexao shelving (fit linear em period).
+                // O delay do jato tambem entra na fase do loop (~52%, medido
+                // com jet 0.42): compensa para a afinacao nao depender de jet.
+                let d_bore = (((1.5162 * period - 0.19) - refl_delay)
+                    * (1.0 - 0.52 * (jet_ratio - 0.32)))
+                    .max(4.0);
+                let d_jet = (d_bore * jet_ratio).max(2.0);
+                let bore_out = ring_read(&s.bore, s.w, d_bore);
+                // reflexao shelving invertida: graves refletem ~total, agudos
+                // refletem 28% (o resto radia) - o papel do lowpass cheio era
+                // matar TUDO em cima, deixando o tom opaco e o chiado exposto
+                let k = onepole_k(fc_refl, ctx.sr);
+                s.lp = flush_denorm(s.lp + k * (bore_out - s.lp));
+                let refl = -0.98 * (s.lp + 0.28 * (bore_out - s.lp));
+                // turbulencia fisica (ver TurbState): escala U^2, gate de
+                // Reynolds, espectro de Strouhal, wander nao-estacionario
+                let uj = pressure.max(0.0).sqrt();
+                let mut rng = s.rng;
+                let turb = s.turb.tick(&mut rng, uj, ctx.sr);
+                s.rng = rng;
+                let breath_p = p_eff * 0.9;
+                // jato: diferenca de pressao viaja o jet delay; o ruido entra
+                // como perturbacao do DESLOCAMENTO do jato (in-loop, pre-NL)
                 let jet_in = breath_p - 0.5 * refl;
-                jet[*w] = jet_in;
-                let x = ring_read(jet, *w, d_jet);
-                let jet_out = (x * (x * x - 1.0)).clamp(-1.0, 1.0);
-                bore[*w] = 0.5 * refl + jet_out;
-                *w = (*w + 1) % bore.len();
-                Val::S(bore_out * 0.5 * g)
+                s.jet[s.w] = jet_in;
+                let x = ring_read(&s.jet, s.w, d_jet) + breath_noise * 0.9 * turb;
+                // tanh(cubica): identica a x^3-x na regiao util, saturacao
+                // suave fora (sem derivada descontinua = sem spray espectral)
+                let jet_out = (x * (x * x - 1.0)).tanh();
+                let dc_out = jet_out - s.dc.0 + 0.995 * s.dc.1;
+                s.dc.0 = jet_out;
+                s.dc.1 = dc_out;
+                s.bore[s.w] = flush_denorm(dc_out) + 0.5 * refl;
+                s.w = (s.w + 1) % s.bore.len();
+                // radiacao: o que sai da embocadura e a DERIVADA da pressao
+                // (dipolo, +6db/oct ate ~1khz) - o sopro herda a mesma cor
+                let out = (bore_out - 0.86 * s.prev_out) * 3.0;
+                s.prev_out = bore_out;
+                Val::S(out * g)
             } else {
                 Val::S(0.0)
             }
         }
         Op::Reed => {
-            // clarinet: pressure-controlled reed reflection into a closed bore
-            // (half-period delay -> odd harmonics)
+            // clarinete: lei de fluxo de Bernoulli adimensional (Kergomard/
+            // Guillemain 2005) + tubo fechado-aberto (meio periodo -> impares).
+            // u = zeta*h*sign(gamma-p)*sqrt(|gamma-p|), h = abertura da palheta
+            // com joelho SUAVE no beating (fortissimo comprime e brilha em vez
+            // de morrer, que era o defeito da tabela linear antiga).
+            // Reflexao = -0.95 * one-zero * cutoff de toneholes (~1.5khz):
+            // abaixo do cutoff reflete (tom escuro chalumeau), acima radia.
+            // Turbulencia entra NO FLUXO u (variancia ~u^2): pulsa em f0
+            // porque o proprio fluxo da palheta pulsa - sopro dentro da nota.
             let freq = eval_arg(args, "freq", Val::Hz(220.0), ctx).as_hz().clamp(60.0, 2500.0);
             let pressure = eval_arg(args, "pressure", Val::S(0.8), ctx).num().clamp(0.0, 1.5);
             let stiffness = eval_arg(args, "stiffness", Val::S(0.5), ctx).num().clamp(0.0, 1.0);
@@ -1625,25 +1769,73 @@ fn eval_call(op: Op, args: &[(String, Expr)], id: usize, ctx: &mut Ctx) -> Val {
             let cap = (ctx.sr / 40.0) as usize + 8;
             let nseed = ctx.seed ^ (id as u64).wrapping_mul(0x9E3779B97F4A7C15) | 1;
             let st = ctx.state.get_or(id, || {
-                NodeStateBox(NodeState::Reed { bore: vec![0.0; cap], w: 0, lp: 0.0, rng: nseed })
+                NodeStateBox(NodeState::Reed(Box::new(ReedS {
+                    bore: vec![0.0; cap],
+                    w: 0,
+                    lp: 0.0,
+                    oz: 0.0,
+                    rng: nseed,
+                    turb: TurbState::default(),
+                    prev_out: 0.0,
+                })))
             });
-            if let NodeStateBox(NodeState::Reed { bore, w, lp, rng }) = st {
+            if let NodeStateBox(NodeState::Reed(s)) = st {
                 let period = ctx.sr / freq;
-                // closed tube: wave travels bore twice per period -> delay = period/2
-                let d_bore = (period * 0.5 - 1.5).max(2.0);
-                let bore_out = ring_read(bore, *w, d_bore);
-                let k = onepole_k(5000.0, ctx.sr);
-                *lp = flush_denorm(*lp + k * (bore_out - *lp));
-                // 0.55: keeps the reed in its unclamped operating region
-                let breath_p = pressure * 0.55 * (1.0 + breath_noise * xorshift(rng));
-                // reflected pressure wave (closed end inverts) vs mouth pressure
-                let pdiff = -0.95 * *lp - breath_p;
-                // reed reflection table: opens/closes with the pressure difference
-                let slope = -(0.5 + 0.6 * stiffness);
-                let refl_reed = (0.6 + slope * pdiff).clamp(-1.0, 1.0);
-                bore[*w] = breath_p + pdiff * refl_reed;
-                *w = (*w + 1) % bore.len();
-                Val::S(bore_out * g)
+                let fc_th = 1500.0;
+                // fase da reflexao: one-zero (0.5 sample) + polo do tonehole
+                let tau = 2.0 * std::f64::consts::PI;
+                let refl_delay = 0.5 + (freq / fc_th).atan() / (tau * freq) * ctx.sr;
+                // tubo fechado: meio periodo por volta; constantes calibradas
+                // por sweep d3..a4 (a tabela antiga tocava +6..+20ct sharp)
+                let d_bore = (period * 0.50080 + 0.45 - refl_delay).max(2.0);
+                let bore_out = ring_read(&s.bore, s.w, d_bore);
+                // reflexao no extremo aberto: one-zero (media de 2 samples,
+                // como STK) + cutoff de toneholes; inversao de pressao
+                let oz = 0.5 * (bore_out + s.oz);
+                s.oz = bore_out;
+                let k = onepole_k(fc_th, ctx.sr);
+                s.lp = flush_denorm(s.lp + k * (oz - s.lp));
+                let pm = -0.95 * s.lp;
+                // gamma: pressao de boca normalizada (limiar 1/3, beating >0.5)
+                let gamma = (0.10 + 0.40 * pressure) * smoothstep(0.0, 0.10, pressure);
+                // zeta: palheta dura = abertura menor = menos fluxo
+                let zeta = 0.45 - 0.25 * stiffness;
+                // Newton (4 iteracoes) em F(u) = u - u_flow(gamma - 2pm - u):
+                // joelho suave do beating via h = softmax(0, 1 - x)
+                let gg = gamma - 2.0 * pm;
+                let uflow = |x: f64| -> f64 {
+                    let z = 1.0 - x;
+                    let h = 0.5 * (z + (z * z + 0.004).sqrt());
+                    zeta * h * x.signum() * x.abs().sqrt()
+                };
+                let mut u = 0.0;
+                for _ in 0..4 {
+                    let f0v = u - uflow(gg - u);
+                    let df = 1e-4;
+                    let f1v = (u + df) - uflow(gg - u - df);
+                    let d = (f1v - f0v) / df;
+                    if d.abs() > 1e-9 {
+                        u -= f0v / d;
+                    }
+                }
+                // turbulencia no fluxo: escala |u|*u (variancia ~u^4 fisica),
+                // pulsa em f0 porque u pulsa (fecha a cada ciclo da palheta)
+                let uj = (gamma.max(0.0) / 0.45).sqrt();
+                let mut rng = s.rng;
+                let turb = s.turb.tick(&mut rng, uj, ctx.sr);
+                s.rng = rng;
+                let u_total = u + breath_noise * 0.7 * u.abs().min(0.5) * turb;
+                // onda que desce o tubo: p+ = pm + u
+                s.bore[s.w] = flush_denorm(pm + u_total);
+                s.w = (s.w + 1) % s.bore.len();
+                // radiacao: incidente menos refletida = passa-altas fisico
+                // (graves voltam, agudos saem), depois derivada (dipolo)
+                // 85: ondas adimensionais (u~0.1) -> paridade de nivel com o
+                // flute a gain 1 (medido A/B a v0.7)
+                let trans = bore_out - 0.95 * s.lp;
+                let out = (trans - 0.82 * s.prev_out) * 85.0;
+                s.prev_out = trans;
+                Val::S(out * g)
             } else {
                 Val::S(0.0)
             }
@@ -2261,64 +2453,93 @@ fn eval_call(op: Op, args: &[(String, Expr)], id: usize, ctx: &mut Ctx) -> Val {
             let cap = (ctx.sr / 30.0) as usize + 8;
             let nseed = ctx.seed ^ (id as u64).wrapping_mul(0x2545F4914F6CDD1D) | 1;
             let st = ctx.state.get_or(id, || {
-                NodeStateBox(NodeState::Brass {
+                NodeStateBox(NodeState::Brass(Box::new(BrassS {
                     bore: vec![0.0; cap],
                     w: 0,
                     lip1: 0.0,
                     lip2: 0.0,
                     lp: 0.0,
                     dc: (0.0, 0.0),
-                    env: 0.0,
+                    ap: (0.0, 0.0),
                     rng: nseed,
-                    nlp: 0.0,
-                })
+                    turb: TurbState::default(),
+                    prev_out: 0.0,
+                })))
             });
-            if let NodeStateBox(NodeState::Brass { bore, w, lip1, lip2, lp, dc, env, rng, nlp }) = st {
+            if let NodeStateBox(NodeState::Brass(s)) = st {
                 let period = ctx.sr / freq;
                 // intonation fit (2-point): lip-filter phase lead pulls the
-                // regime sharp; longer bores need proportionally more length
-                let comp = 1.118 + 0.00012 * (period - 168.6).max(0.0);
-                let d_bore = ((period - 1.4) * comp).max(4.0);
-                let bore_out = ring_read(bore, *w, d_bore);
+                // regime sharp; longer bores need proportionally more length.
+                // -1.0: sample medio do allpass do steepening no loop
+                let comp = 1.1333 + 0.000127 * (period - 168.6).max(0.0);
+                let d_bore = ((period - 1.4) * comp - 1.0).max(4.0);
+                let bore_out = ring_read(&s.bore, s.w, d_bore);
                 // bell: lowpass reflects (dark), the rest radiates (bright)
                 let kb = onepole_k(bell, ctx.sr);
-                *lp = flush_denorm(*lp + kb * (bore_out - *lp));
-                // in-loop brassiness: local level follower drives a soft
-                // waveshaper on the reflected wave; tanh(gx)/g is passive
-                let ke = onepole_k(40.0, ctx.sr);
-                *env = flush_denorm(*env + ke * (bore_out.abs() - *env));
-                let gs = 1.0 + rasp * 22.0 * (*env);
-                let refl = (0.92 * *lp * gs).tanh() / gs;
+                s.lp = flush_denorm(s.lp + kb * (bore_out - s.lp));
+                // brassiness = steepening cumulativo de Burgers aproximado no
+                // loop (Vergez/Rodet, Hirschberg 1996): allpass de 1a ordem
+                // com coeficiente modulado pelo PROPRIO sinal (warp de fase
+                // dependente de pressao = frente de onda empina a cada volta,
+                // choque gradual pp->ff) + tanh passivo INSTANTANEO (so a
+                // parte alta da onda satura; sem envelope follower, que
+                // distorcia o ciclo inteiro e mascarava a dinamica real)
+                let refl_raw = 0.92 * s.lp;
+                let a_ap = (rasp * 1.1 * refl_raw).clamp(-0.28, 0.28);
+                let ap_y = a_ap * refl_raw + s.ap.0 - a_ap * s.ap.1;
+                s.ap.0 = flush_denorm(refl_raw);
+                s.ap.1 = flush_denorm(ap_y);
                 // dc-block the reflection (waveguide hygiene)
-                let dcv = refl - dc.0 + 0.995 * dc.1;
-                dc.0 = refl;
-                dc.1 = flush_denorm(dcv);
+                let dcv = ap_y - s.dc.0 + 0.995 * s.dc.1;
+                s.dc.0 = ap_y;
+                s.dc.1 = flush_denorm(dcv);
                 let refl = dcv;
-                // mouth pressure + turbulence
-                let kn = onepole_k(3000.0, ctx.sr);
-                *nlp = flush_denorm(*nlp + kn * (xorshift(rng) - *nlp));
-                let pm = 0.35 * pressure * (1.0 + breath_noise * 4.0 * *nlp);
+                // pressao de boca limpa: metais reais tem o sustain MAIS
+                // limpo dos sopros (NHR -35db); o ar entra so no ataque e
+                // gated pela abertura do labio (pitch-sincrono), nunca como
+                // tapete por cima
+                // remap: a janela de oscilacao do labio e ~pm 0.24..0.42; o
+                // user controla dinamica em 0.3..1.2 e o brilho vem do
+                // steepening (nao do regime morrer em piano)
+                let p_eff = (0.38 + 0.68 * pressure) * smoothstep(0.0, 0.10, pressure);
+                let pm = 0.35 * p_eff;
                 // lip valve: resonator near lip*freq driven by the pressure
                 // difference; its output squared (0..1) gates mouth vs bore
-                let f_lip = (freq * lip * 0.97).clamp(30.0, ctx.sr * 0.4);
-                let r_l = (-std::f64::consts::PI * f_lip / (8.0 * ctx.sr)).exp(); // Q ~ 8
+                // pull-down leve com pressao: cancela o sharp do labio batido
+                // forte (spread medido +4..+15ct de pp a ff sem isso)
+                let f_lip = (freq * lip * (0.99 - 0.010 * (p_eff - 0.95)))
+                    .clamp(30.0, ctx.sr * 0.4);
+                let r_l = (-std::f64::consts::PI * f_lip / (12.0 * ctx.sr)).exp(); // Q ~ 12
                 let th = 2.0 * std::f64::consts::PI * f_lip / ctx.sr;
                 let a1 = 2.0 * r_l * th.cos();
                 let a2 = -r_l * r_l;
-                let dp = pm - refl;
+                // tanh doma o drive em fortissimo: labio batido com forca
+                // demais destrava da resonancia e puxa a afinacao +15ct
+                let dp = (pm - refl).tanh();
                 // dc-normalized drive (dc gain ~0.8): the resonance peak (~Q x)
                 // does the mode selection; unnormalized drive slams the lip
-                let x_l = a1 * *lip1 + a2 * *lip2 + dp * 0.8 * (1.0 - a1 - a2).abs();
-                *lip2 = *lip1;
-                *lip1 = flush_denorm(x_l.clamp(-3.0, 3.0));
+                let x_l = a1 * s.lip1 + a2 * s.lip2 + dp * 0.8 * (1.0 - a1 - a2).abs();
+                s.lip2 = s.lip1;
+                s.lip1 = flush_denorm(x_l.clamp(-3.0, 3.0));
                 // 0.85 cap keeps the gate in its dynamic region at fortissimo
                 // (a lip pegged open makes a sine - the OPPOSITE of brass)
                 let a_open = (x_l * x_l).min(0.85); // 0 closed .. 0.85 open
+                // turbulencia (ver TurbState) gated pela abertura instantanea
+                // do labio: pulsa em f0, e quase nada no sustain
+                let uj = pressure.max(0.0).sqrt();
+                let mut rng = s.rng;
+                let turb = s.turb.tick(&mut rng, uj, ctx.sr);
+                s.rng = rng;
+                let turb_p = breath_noise * 0.07 * a_open * turb;
                 // convex gate: open lip lets mouth pressure in, closed reflects
-                bore[*w] = a_open * pm + (1.0 - a_open) * refl;
-                *w = (*w + 1) % bore.len();
-                // radiated = incident minus reflected part
-                Val::S((bore_out - 0.92 * *lp) * 2.2 * g)
+                s.bore[s.w] = a_open * (pm + turb_p) + (1.0 - a_open) * refl;
+                s.w = (s.w + 1) % s.bore.len();
+                // radiacao: transmitida (incidente - refletida) derivada
+                // 16: paridade de nivel com o flute a gain 1 (A/B a v0.7)
+                let trans = bore_out - 0.92 * s.lp;
+                let out = (trans - 0.72 * s.prev_out) * 50.0;
+                s.prev_out = trans;
+                Val::S(out * g)
             } else {
                 Val::S(0.0)
             }
@@ -2370,6 +2591,7 @@ fn eval_call(op: Op, args: &[(String, Expr)], id: usize, ctx: &mut Ctx) -> Val {
                             s1: [0.0; 4],
                             s2: [0.0; 4],
                             gprev: 0.0,
+                            asp: 0.0,
                             fsc: 1.0 + 0.045 * xorshift(&mut rng),
                             pan: pan.clamp(-1.0, 1.0),
                             onset: 0.04 * u(&mut rng),
@@ -2424,9 +2646,14 @@ fn eval_call(op: Op, args: &[(String, Expr)], id: usize, ctx: &mut Ctx) -> Val {
                     // flow derivative = glottal source * lip radiation (+6db/oct)
                     let mut src = (gl - s.gprev) * 6.0;
                     s.gprev = gl;
-                    // aspiration noise gated by the glottal opening
+                    // aspiracao: ruido colorido (-6db/oct acima de 3khz, a
+                    // banda 5..15khz crua e o percepto de chiado) gated pelo
+                    // QUADRADO da abertura glotal - pulsa em f0 junto com a
+                    // fonte (Klatt AH), quase zero na fase fechada (sem piso)
                     if breath > 0.0 {
-                        src += xorshift(&mut s.rng) * breath * (0.15 + 0.85 * gl) * 0.6;
+                        let ka = onepole_k(3000.0, ctx.sr);
+                        s.asp = flush_denorm(s.asp + ka * (xorshift(&mut s.rng) - s.asp));
+                        src += s.asp * breath * (0.02 + 0.98 * gl * gl) * 1.5;
                     }
                     // 4 parallel formant resonators (per-singer tract length fsc)
                     let mut y = 0.0;
@@ -2620,7 +2847,8 @@ pub struct Voice {
     target_note: f64, // glide target
     vel: f64,
     gate: f64,
-    t: f64, // seconds since note_on
+    t: f64,   // seconds since note_on
+    dur: f64, // scheduled note length in seconds (0 = unknown)
     rand: f64,
     idx: usize,
     start_order: u64,
@@ -2648,6 +2876,7 @@ impl Voice {
             vel: 0.0,
             gate: 0.0,
             t: 0.0,
+            dur: 0.0,
             rand: 0.0,
             idx,
             start_order: 0,
@@ -2663,13 +2892,14 @@ impl Voice {
         }
     }
 
-    fn start(&mut self, note: f64, vel: f64, order: u64, rng: &mut u64, stolen: bool) {
+    fn start(&mut self, note: f64, vel: f64, dur: f64, order: u64, rng: &mut u64, stolen: bool) {
         self.active = true;
         self.note = note;
         self.target_note = note;
         self.vel = vel;
         self.gate = 1.0;
         self.t = 0.0;
+        self.dur = dur;
         self.rand = xorshift(rng) * 0.5 + 0.5;
         self.start_order = order;
         self.state.clear();
@@ -2731,6 +2961,7 @@ impl SynthInstance {
                 time: 0.0,
                 rand: 0.0,
                 vidx: 0.0,
+                dur: 0.0,
                 state: &mut dummy_state,
                 cur: &[],
                 prev: &[],
@@ -2786,6 +3017,11 @@ impl SynthInstance {
     }
 
     pub fn note_on(&mut self, note: f64, vel: f64) {
+        self.note_on_dur(note, vel, 0.0);
+    }
+
+    /// note_on with the scheduled note length (seconds); exposed to voices as `dur`
+    pub fn note_on_dur(&mut self, note: f64, vel: f64, dur: f64) {
         self.order += 1;
         if self.mono {
             let was_empty = self.mono_stack.is_empty();
@@ -2811,13 +3047,14 @@ impl SynthInstance {
                     }
                     v.t = 0.0;
                 } else {
-                    v.start(note, vel, self.order, &mut self.rng, false);
+                    v.start(note, vel, dur, self.order, &mut self.rng, false);
                     v.note = note;
                 }
             }
             v.active = true;
             v.gate = 1.0;
             v.vel = vel;
+            v.dur = dur;
             v.target_note = note;
             if !v.active || was_empty && self.glide_s == 0.0 {
                 v.note = note;
@@ -2829,7 +3066,7 @@ impl SynthInstance {
             // find free voice
             if let Some(v) = self.voices.iter_mut().find(|v| !v.active) {
                 let order = self.order;
-                v.start(note, vel, order, &mut self.rng, false);
+                v.start(note, vel, dur, order, &mut self.rng, false);
                 return;
             }
             // steal
@@ -2857,7 +3094,7 @@ impl SynthInstance {
                     .unwrap_or(0),
             };
             let order = self.order;
-            self.voices[idx].start(note, vel, order, &mut self.rng, true);
+            self.voices[idx].start(note, vel, dur, order, &mut self.rng, true);
         }
     }
 
@@ -2961,6 +3198,7 @@ impl SynthInstance {
                         time: 0.0,
                         rand: 0.0,
                         vidx: 0.0,
+                        dur: 0.0,
                         state: &mut self.global_state,
                         cur: &self.global_cur,
                         prev: &self.global_prev,
@@ -3050,6 +3288,7 @@ impl SynthInstance {
                         time: 0.0,
                         rand: 0.0,
                         vidx: 0.0,
+                        dur: 0.0,
                         state: &mut *bus_state,
                         cur: &[],
                         prev: &[],
@@ -3118,6 +3357,7 @@ fn voice_chunk(
                     vel: v.vel,
                     gate: v.gate,
                     time: v.t,
+                    dur: v.dur,
                     rand: v.rand,
                     vidx: v.idx as f64,
                     state: &mut v.state,
@@ -3145,6 +3385,7 @@ fn voice_chunk(
                 vel: v.vel,
                 gate: v.gate,
                 time: v.t,
+                dur: v.dur,
                 rand: v.rand,
                 vidx: v.idx as f64,
                 state: &mut v.state,
@@ -3168,6 +3409,7 @@ fn voice_chunk(
                 vel: v.vel,
                 gate: v.gate,
                 time: v.t,
+                dur: v.dur,
                 rand: v.rand,
                 vidx: v.idx as f64,
                 state: &mut v.state,
@@ -3263,6 +3505,7 @@ impl MasterChain {
                     time: 0.0,
                     rand: 0.0,
                     vidx: 0.0,
+                    dur: 0.0,
                     state: &mut self.state,
                     cur: &[],
                     prev: &[],

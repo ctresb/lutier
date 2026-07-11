@@ -42,7 +42,7 @@ pub fn render_song(
     fn apply_events(tr: &mut Track, s: u64) {
         while tr.cursor < tr.evs.len() && tr.evs[tr.cursor].sample <= s {
             match &tr.evs[tr.cursor].ev {
-                Ev::On(n, v) => tr.inst.note_on(*n, *v),
+                Ev::On(n, v, d) => tr.inst.note_on_dur(*n, *v, *d),
                 Ev::Off(n) => tr.inst.note_off(*n),
                 Ev::Param(name, v) => tr.inst.set_param(name, *v),
                 Ev::Bpm(v) => tr.inst.bpm = *v,

@@ -12,6 +12,7 @@ fn builtin(name: &str) -> Option<BuiltinVar> {
         "velocity" => BuiltinVar::Velocity,
         "gate" => BuiltinVar::Gate,
         "time" => BuiltinVar::Time,
+        "dur" => BuiltinVar::Dur,
         "rand" => BuiltinVar::Rand,
         "voice_idx" => BuiltinVar::VoiceIdx,
         _ => return None,
