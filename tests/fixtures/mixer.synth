@@ -1,0 +1,75 @@
+# fixture golden: MIXER completo - canais com inserts, fx de usuario
+# (locais e importados), sends pre/pos-fader, roteamento canal->canal,
+# sidechain entre canais, params de canal automatados, EQ parametrico.
+# Qualquer mudanca no mixer/fx/EQ acusa neste fingerprint.
+import "presets/mix.synth"
+
+# fx local compondo fx importado (expansao recursiva)
+fx voz_de_frente(brilho: 0db) {
+    presenca(amount: brilho)
+    nivela(threshold: -22db)
+}
+
+synth lead {
+    poly 4
+    kill after 2s
+    voice {
+        let e = env { 0 -> 1 in 6ms -> 0.4 in 200ms sustain 0.4 release -> 0 in 300ms }
+        out pan(saw(freq: note, unison: 3, spread: 8ct, gain: 0.3) * e * velocity, 0)
+    }
+}
+
+synth cama {
+    poly 6
+    kill after 3s
+    voice {
+        let e = env { 0 -> 1 in 80ms sustain 1 release -> 0 in 500ms }
+        out pan(triangle(freq: note, gain: 0.25) * e * velocity, voice_idx * 0.4 - 0.2)
+    }
+}
+
+synth bumbo {
+    poly 2
+    kill after 1s
+    voice {
+        let p = env { 90hz -> 45hz in 60ms curve exp }
+        let e = env { 0 -> 1 in 2ms -> 0 in 250ms curve exp }
+        out pan(sine(freq: p, gain: 0.8) * e * velocity, 0)
+    }
+}
+
+mixer {
+    channel melodia {
+        in: lead
+        param corpo: db = 0db
+        eq3(mid: corpo, high: 1db)
+        voz_de_frente(brilho: -2db)
+        gain -3db
+        pan -0.15
+        send sala: -10db
+    }
+    channel fundo {
+        in: cama
+        limpa_grave(freq: 110hz)
+        # o fundo abre espaco quando o bumbo (canal, nao synth) bate
+        abre_espaco(alvo: pulso, amount: 0.5)
+        gain -6db
+        send sala: -16db pre
+    }
+    channel pulso {
+        in: bumbo
+        nivela(threshold: -18db, ratio: 4)
+        gain -2db
+    }
+    channel sala {
+        reverb(mix: 1.0, size: 0.8, damp: 4khz)
+        largura(amount: 0.4)
+        gain -8db
+        out master
+    }
+}
+
+master {
+    bus_gain -1db
+    limiter(ceiling: -1db, lookahead: 5ms, release: 60ms)
+}

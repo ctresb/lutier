@@ -1,0 +1,30 @@
+# fixture golden do mixer: cobre set/automate de canal (gain, pan, send e
+# param declarado) junto com material que exercita sidechain e sends.
+tempo 112
+
+track lead
+0 a4 1 0.8
+1 c5 1 0.7
+2 e5 1 0.75
+3 d5 0.5 0.7
+3.5 c5 0.5 0.65
+4 b4 2 0.8
+6 a4 2 0.75
+
+track cama
+0 [a3 c4 e4] 4 0.5
+4 [g3 b3 d4] 4 0.5
+
+track bumbo
+0 c2 0.5 0.9 x8 @1
+
+mixer melodia
+set corpo 2
+automate gain 0 -12 -> 2 -3 curve exp
+automate pan 0 -0.15 -> 8 0.3
+
+mixer fundo
+automate send.sala 0 -30 -> 8 -10
+
+mixer sala
+set gain -8

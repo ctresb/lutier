@@ -54,6 +54,15 @@ fn golden_everything() {
     );
 }
 
+//  mixer      - MIXER completo: canais, inserts, fx de usuario (locais e
+//               importados, expansao recursiva), sends pre/pos, sidechain
+//               entre canais, EQ parametrico, automacao de canal no score
+
+#[test]
+fn golden_mixer() {
+    golden_case("mixer", "tests/fixtures/mixer.synth", "tests/fixtures/mixer.score");
+}
+
 #[test]
 fn golden_demo() {
     golden_case("demo", "tests/fixtures/demo.synth", "tests/fixtures/demo.score");

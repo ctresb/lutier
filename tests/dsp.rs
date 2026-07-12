@@ -594,3 +594,175 @@ fn string_pickup_and_stiff_stay_in_tune() {
     let f0 = f0_autocorr(&mono, 8820, 55.0, 120.0);
     assert!((f0 - 82.41).abs() < 82.41 * 0.01, "string stiff/pickup f0 {:.2}hz, esperado ~82.4hz", f0);
 }
+
+// ---------- mixer, fx de usuario, EQ parametrico, meter ----------
+
+/// db num bin de frequencia (max sobre +-3 bins pra tolerar leakage)
+fn bin_db(buf: &[(f64, f64)], freq: f64) -> f64 {
+    let mono: Vec<f64> = buf.iter().skip(4410).map(|s| 0.5 * (s.0 + s.1)).collect();
+    let spec = spectrum_db(&mono);
+    let bin_hz = 44100.0 / (spec.len() as f64 * 2.0);
+    let b = (freq / bin_hz) as usize;
+    spec[b.saturating_sub(3)..(b + 4).min(spec.len())].iter().cloned().fold(f64::MIN, f64::max)
+}
+
+const TWO_TONE: &str = "synth t { poly 1 voice { out sine(freq: 220hz, gain: 0.2) + sine(freq: 4khz, gain: 0.2) } }";
+const TONE_SCORE: &str = "tempo 120\ntrack a t\n0 c4 4 1.0\n";
+
+#[test]
+fn peak_eq_cuts_at_center_leaves_rest() {
+    // -12db em 220hz nao pode mexer em 4khz: delta(low-high) entre
+    // render com e sem EQ = -12db (normalizacao cancela na diferenca)
+    let dry = render_patch(TWO_TONE, TONE_SCORE);
+    let wet = render_patch(
+        &format!("{} mixer {{ channel c {{ in: t peak(freq: 220hz, gain: -12db, q: 1.0) }} }}", TWO_TONE),
+        TONE_SCORE,
+    );
+    let d_dry = bin_db(&dry, 220.0) - bin_db(&dry, 4000.0);
+    let d_wet = bin_db(&wet, 220.0) - bin_db(&wet, 4000.0);
+    let cut = d_wet - d_dry;
+    assert!((cut + 12.0).abs() < 1.5, "peak -12db aplicou {:.1}db", cut);
+}
+
+#[test]
+fn shelves_boost_their_side_only() {
+    let dry = render_patch(TWO_TONE, TONE_SCORE);
+    let low = render_patch(
+        &format!("{} mixer {{ channel c {{ in: t lowshelf(freq: 600hz, gain: 6db) }} }}", TWO_TONE),
+        TONE_SCORE,
+    );
+    let hi = render_patch(
+        &format!("{} mixer {{ channel c {{ in: t highshelf(freq: 1500hz, gain: -9db) }} }}", TWO_TONE),
+        TONE_SCORE,
+    );
+    let d = |b: &Vec<(f64, f64)>| bin_db(b, 220.0) - bin_db(b, 4000.0);
+    assert!((d(&low) - d(&dry) - 6.0).abs() < 1.5, "lowshelf +6db: delta {:.1}db", d(&low) - d(&dry));
+    assert!((d(&hi) - d(&dry) - 9.0).abs() < 1.5, "highshelf -9db: delta {:.1}db", d(&hi) - d(&dry));
+}
+
+#[test]
+fn fx_expansion_matches_direct_nodes() {
+    // fx de usuario instanciado = nos diretos com os mesmos args (bit-igual:
+    // biquad nao tem rng; so os node ids mudam)
+    let direct = render_patch(
+        &format!("{} mixer {{ channel c {{ in: t peak(freq: 800hz, gain: 5db, q: 1.3) highshelf(freq: 3khz, gain: -4db) }} }}", TWO_TONE),
+        TONE_SCORE,
+    );
+    let viafx = render_patch(
+        &format!("fx meueq(g: 0db, hs: 0db) {{ peak(freq: 800hz, gain: g, q: 1.3) highshelf(freq: 3khz, gain: hs) }} {} mixer {{ channel c {{ in: t meueq(g: 5db, hs: -4db) }} }}", TWO_TONE),
+        TONE_SCORE,
+    );
+    assert_eq!(direct.len(), viafx.len());
+    let maxd = direct
+        .iter()
+        .zip(&viafx)
+        .map(|(a, b)| (a.0 - b.0).abs().max((a.1 - b.1).abs()))
+        .fold(0.0f64, f64::max);
+    assert!(maxd < 1e-12, "fx expandido difere dos nos diretos: max {:.3e}", maxd);
+}
+
+const TWO_SYNTHS: &str = "synth a { poly 1 voice { out sine(freq: 400hz, gain: 0.3) } } synth b { poly 1 voice { out sine(freq: 2khz, gain: 0.3) } }";
+const TWO_SCORE: &str = "tempo 120\ntrack a\n0 c4 4 1.0\ntrack b\n0 c4 4 1.0\n";
+
+#[test]
+fn mixer_channel_gain_applies_to_routed_only() {
+    // a passa pelo canal com gain -6db, b vai direto: delta(a-b) cai 6db
+    let dry = render_patch(TWO_SYNTHS, TWO_SCORE);
+    let wet = render_patch(
+        &format!("{} mixer {{ channel ca {{ in: a gain -6db }} }}", TWO_SYNTHS),
+        TWO_SCORE,
+    );
+    let d = |b: &Vec<(f64, f64)>| bin_db(b, 400.0) - bin_db(b, 2000.0);
+    let delta = d(&wet) - d(&dry);
+    assert!((delta + 6.0).abs() < 0.8, "gain -6db no canal aplicou {:.1}db", delta);
+}
+
+#[test]
+fn mixer_send_adds_parallel_path() {
+    // send -6db (0.5x) pra canal neutro somando no master: 1.5x = +3.52db
+    let dry = render_patch(
+        &format!("{} mixer {{ channel ca {{ in: a }} }}", TWO_SYNTHS),
+        TWO_SCORE,
+    );
+    let wet = render_patch(
+        &format!("{} mixer {{ channel ca {{ in: a send eco: -6db }} channel eco {{ gain 0db }} }}", TWO_SYNTHS),
+        TWO_SCORE,
+    );
+    let d = |b: &Vec<(f64, f64)>| bin_db(b, 400.0) - bin_db(b, 2000.0);
+    let delta = d(&wet) - d(&dry);
+    let expect = 20.0 * 1.5011f64.log10(); // 1 + 10^(-6/20)
+    assert!((delta - expect).abs() < 0.8, "send: esperado +{:.2}db, veio {:.2}db", expect, delta);
+}
+
+#[test]
+fn mixer_pan_hard_right_kills_left() {
+    let buf = render_patch(
+        "synth a { poly 1 voice { out sine(freq: 500hz, gain: 0.3) } } mixer { channel ca { in: a pan 1.0 } }",
+        "tempo 120\ntrack a\n0 c4 2 1.0\n",
+    );
+    let seg = &buf[8820..44100];
+    let el: f64 = seg.iter().map(|s| s.0 * s.0).sum();
+    let er: f64 = seg.iter().map(|s| s.1 * s.1).sum();
+    assert!(el < er * 0.01, "pan 1.0: energia L {:.3e} vs R {:.3e}", el, er);
+}
+
+#[test]
+fn mixer_routing_cycle_is_error() {
+    let err = match lutier::render::render_song(
+        "synth a { poly 1 voice { out sine(freq: note) } } mixer { channel x { in: a out y } channel y { out x } }",
+        "tempo 120\ntrack a\n0 c4 1 1.0\n",
+        44100.0,
+        1,
+    ) {
+        Err(e) => e,
+        Ok(_) => panic!("ciclo de mixer deveria falhar"),
+    };
+    assert!(err.contains("E044"), "ciclo de mixer nao acusou E044: {}", err);
+}
+
+#[test]
+fn mixer_gain_automation_ramps() {
+    // gain -40db -> 0db em 8 beats: fim tem que estar >20db acima do comeco
+    let buf = render_patch(
+        "synth a { poly 1 voice { out sine(freq: 500hz, gain: 0.3) } } mixer { channel ca { in: a } }",
+        "tempo 120\ntrack a\n0 c4 8 1.0\nmixer ca\nautomate gain 0 -40 -> 8 0\n",
+    );
+    let rms = |s: &[(f64, f64)]| -> f64 {
+        (s.iter().map(|v| (v.0 * v.0 + v.1 * v.1) * 0.5).sum::<f64>() / s.len() as f64).sqrt()
+    };
+    let start = rms(&buf[4410..22050]); // 0.1..0.5s
+    let end = rms(&buf[3 * 44100..(3.9 * 44100.0) as usize]); // 3..3.9s (nota ate 4s)
+    let rise_db = 20.0 * (end / start.max(1e-12)).log10();
+    assert!(rise_db > 20.0, "automacao de gain subiu so {:.1}db", rise_db);
+}
+
+#[test]
+fn lufs_of_known_sine_matches_bs1770() {
+    // seno 997hz amplitude 0.1 nos dois canais: K-weight em 997hz =
+    // +0.691db (por design do offset -0.691), entao LUFS = -20.0 exato
+    let sr = 44100.0;
+    let buf: Vec<(f64, f64)> = (0..(sr as usize * 5))
+        .map(|i| {
+            let v = 0.1 * (2.0 * std::f64::consts::PI * 997.0 * i as f64 / sr).sin();
+            (v, v)
+        })
+        .collect();
+    let lufs = lutier::meter::lufs_integrated(&buf, sr);
+    assert!((lufs + 20.0).abs() < 0.1, "LUFS de seno conhecido: {:.2}, esperado -20.0", lufs);
+}
+
+#[test]
+fn mixer_transparent_channel_is_noop() {
+    // canal vazio (gain 0db, pan 0, sem inserts) nao pode mudar o som
+    let dry = render_patch(TWO_SYNTHS, TWO_SCORE);
+    let wet = render_patch(
+        &format!("{} mixer {{ channel ca {{ in: a }} channel cb {{ in: b }} }}", TWO_SYNTHS),
+        TWO_SCORE,
+    );
+    let maxd = dry
+        .iter()
+        .zip(&wet)
+        .map(|(x, y)| (x.0 - y.0).abs().max((x.1 - y.1).abs()))
+        .fold(0.0f64, f64::max);
+    assert!(maxd < 1e-9, "canal neutro alterou o audio: max diff {:.3e}", maxd);
+}
