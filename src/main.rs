@@ -1,5 +1,5 @@
 // lutier CLI: render .synth + .score to wav/mp3.
-use lutier::render::render_song;
+use lutier::render::render_song_opts;
 use lutier::wavio;
 use std::fs;
 
@@ -30,15 +30,28 @@ fn main() {
     let out_path = flag("-o").unwrap_or_else(|| "out/song.wav".to_string());
     let seed: u64 = flag("--seed").and_then(|s| s.parse().ok()).unwrap_or(1);
     let bench = args.iter().any(|a| a == "--bench");
+    let mix_report = args.iter().any(|a| a == "--mix-report");
 
     let sr = 44100.0;
     let synth_src = fs::read_to_string(synth_path).expect("cannot read .synth file");
     let score_src = fs::read_to_string(score_path).expect("cannot read .score file");
 
-    let res = render_song(&synth_src, &score_src, sr, seed).unwrap_or_else(|e| {
+    let res = render_song_opts(&synth_src, &score_src, sr, seed, mix_report).unwrap_or_else(|e| {
         eprintln!("{}: {}", synth_path, e);
         std::process::exit(1);
     });
+    if mix_report {
+        // stems (synths + canais) + master, tudo na escala do render final
+        let mut stats: Vec<lutier::meter::StemStats> = res
+            .stems
+            .iter()
+            .map(|(name, buf)| lutier::meter::analyze_stem(name, buf, sr))
+            .collect();
+        stats.push(lutier::meter::analyze_stem("MASTER", &res.buf, sr));
+        println!();
+        lutier::meter::print_report(&stats);
+        println!();
+    }
     let dur = res.buf.len() as f64 / sr;
     println!("rendered {:.1}s", dur);
     if bench {

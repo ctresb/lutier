@@ -18,6 +18,13 @@ pub struct Track {
     pub events: Vec<TimedEv>,
 }
 
+/// automacao de canal do mixer: eventos Param (gain/pan/send.<canal> em db,
+/// params de canal em valor cru) + Bpm broadcast
+pub struct MixTrack {
+    pub channel: String,
+    pub events: Vec<TimedEv>,
+}
+
 pub fn note_name_to_midi(s: &str) -> Result<f64, String> {
     let b = s.as_bytes();
     if b.is_empty() {
@@ -135,7 +142,7 @@ fn parse_note_token(s: &str) -> Result<f64, String> {
     note_name_to_midi(s)
 }
 
-pub fn parse_score(src: &str, sr: f64) -> Result<(f64, Vec<Track>), String> {
+pub fn parse_score(src: &str, sr: f64) -> Result<(f64, Vec<Track>, Vec<MixTrack>), String> {
     // pass 1: tempo points
     let mut tempo_points: Vec<(f64, f64)> = Vec::new();
     let clean_line = |raw: &str| -> String {
@@ -195,11 +202,18 @@ pub fn parse_score(src: &str, sr: f64) -> Result<(f64, Vec<Track>), String> {
     let mut cur_track: Option<usize> = None;
     let mut had_absolute = false;
 
+    // sufixos db e % sao ergonomia: "set gain -3db" le -3 (gain de mixer E em db)
     let parse_num = |s: &str, what: &str, lineno: usize| -> Result<f64, String> {
-        s.trim_end_matches('%')
+        s.trim_end_matches("db")
+            .trim_end_matches('%')
             .parse()
             .map_err(|_| format!("line {}: bad {}", lineno + 1, what))
     };
+
+    // contexto de canal do mixer: (nome, sets); set/automate caem aqui
+    let mut mix_metas: Vec<(String, Vec<(String, f64)>)> = Vec::new();
+    let mut mix_autos: Vec<Automation> = Vec::new();
+    let mut cur_mixer: Option<usize> = None;
 
     for (lineno, raw) in src.lines().enumerate() {
         let line = clean_line(raw);
@@ -209,7 +223,19 @@ pub fn parse_score(src: &str, sr: f64) -> Result<(f64, Vec<Track>), String> {
         let parts: Vec<&str> = line.split_whitespace().collect();
         match parts[0] {
             "tempo" => {} // handled in pass 1
+            "mixer" => {
+                // mixer <canal>: set/automate seguintes vao pro canal do mixer
+                let name = parts.get(1).ok_or("mixer needs channel name")?.to_string();
+                cur_track = None;
+                if let Some(i) = mix_metas.iter().position(|(n, _)| *n == name) {
+                    cur_mixer = Some(i);
+                } else {
+                    mix_metas.push((name, Vec::new()));
+                    cur_mixer = Some(mix_metas.len() - 1);
+                }
+            }
             "track" => {
+                cur_mixer = None;
                 let synth = parts.get(2).or(parts.get(1)).ok_or("track needs synth name")?;
                 // reuse track if same synth already declared (sections switch back)
                 if let Some(i) = metas.iter().position(|m| m.synth == *synth) {
@@ -244,16 +270,28 @@ pub fn parse_score(src: &str, sr: f64) -> Result<(f64, Vec<Track>), String> {
                 metas[i].human_vel = v / 100.0;
             }
             "set" => {
-                let i = cur_track.ok_or("set before track")?;
                 let name = parts.get(1).ok_or("set needs name")?.to_string();
-                let v: f64 = parts.get(2).and_then(|s| s.parse().ok()).ok_or("set needs value")?;
-                metas[i].sets.push((name, v));
+                let v = parse_num(parts.get(2).ok_or("set needs value")?, "set value", lineno)?;
+                match (cur_mixer, cur_track) {
+                    (Some(m), _) => mix_metas[m].1.push((name, v)),
+                    (None, Some(i)) => metas[i].sets.push((name, v)),
+                    _ => return Err(format!("line {}: set before track/mixer", lineno + 1)),
+                }
             }
             "automate" => {
                 // automate <param> <beat> <val> [-> <beat> <val> [curve c]]...
-                let i = cur_track.ok_or(format!("line {}: automate before track", lineno + 1))?;
+                let i = match (cur_mixer, cur_track) {
+                    (Some(m), _) => m,
+                    (None, Some(i)) => i,
+                    _ => return Err(format!("line {}: automate before track/mixer", lineno + 1)),
+                };
                 let param = parts.get(1).ok_or("automate needs param")?.to_string();
-                if autos.iter().any(|a| a.track == i && a.param == param) {
+                let dup = if cur_mixer.is_some() {
+                    mix_autos.iter().any(|a| a.track == i && a.param == param)
+                } else {
+                    autos.iter().any(|a| a.track == i && a.param == param)
+                };
+                if dup {
                     return Err(format!(
                         "E020 line {}: duplicate automate for param '{}' on this track",
                         lineno + 1,
@@ -296,7 +334,11 @@ pub fn parse_score(src: &str, sr: f64) -> Result<(f64, Vec<Track>), String> {
                     return Err(format!("line {}: automate needs points", lineno + 1));
                 }
                 pts.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap());
-                autos.push(Automation { track: i, param, points: pts });
+                if cur_mixer.is_some() {
+                    mix_autos.push(Automation { track: i, param, points: pts });
+                } else {
+                    autos.push(Automation { track: i, param, points: pts });
+                }
             }
             "section" => {
                 let name = parts.get(1).ok_or("section needs name")?.to_string();
@@ -406,10 +448,25 @@ pub fn parse_score(src: &str, sr: f64) -> Result<(f64, Vec<Track>), String> {
         }
     }
 
+    // canais do mixer: sets viram Param no sample 0
+    let mut mix_tracks: Vec<MixTrack> = mix_metas
+        .iter()
+        .map(|(n, sets)| MixTrack {
+            channel: n.clone(),
+            events: sets
+                .iter()
+                .map(|(p, v)| TimedEv { sample: 0, ev: Ev::Param(p.clone(), *v) })
+                .collect(),
+        })
+        .collect();
+
     // bpm-change events broadcast to all tracks (bus FX re-read bpm per block)
     for &(b, v) in tmap.points.iter().skip(1) {
         let s = (tmap.time_of_beat(b) * sr) as u64;
         for tr in tracks.iter_mut() {
+            tr.events.push(TimedEv { sample: s, ev: Ev::Bpm(v) });
+        }
+        for tr in mix_tracks.iter_mut() {
             tr.events.push(TimedEv { sample: s, ev: Ev::Bpm(v) });
         }
     }
@@ -460,12 +517,10 @@ pub fn parse_score(src: &str, sr: f64) -> Result<(f64, Vec<Track>), String> {
 
     // automation -> block-rate Param events (64-sample blocks; param smoothing covers zipper)
     const BLOCK: f64 = 64.0;
-    for a in &autos {
+    let expand_auto = |a: &Automation, events: &mut Vec<TimedEv>| {
         let first = a.points.first().unwrap();
         let last = a.points.last().unwrap();
-        tracks[a.track]
-            .events
-            .push(TimedEv { sample: 0, ev: Ev::Param(a.param.clone(), first.value) });
+        events.push(TimedEv { sample: 0, ev: Ev::Param(a.param.clone(), first.value) });
         let s0 = (tmap.time_of_beat(first.beat) * sr) as u64;
         let s1 = (tmap.time_of_beat(last.beat) * sr) as u64;
         let mut s = s0;
@@ -496,20 +551,28 @@ pub fn parse_score(src: &str, sr: f64) -> Result<(f64, Vec<Track>), String> {
                     break;
                 }
             }
-            tracks[a.track]
-                .events
-                .push(TimedEv { sample: s, ev: Ev::Param(a.param.clone(), val) });
+            events.push(TimedEv { sample: s, ev: Ev::Param(a.param.clone(), val) });
             s += BLOCK as u64;
         }
-        tracks[a.track].events.push(TimedEv {
-            sample: s1 + 1,
-            ev: Ev::Param(a.param.clone(), last.value),
-        });
+        events.push(TimedEv { sample: s1 + 1, ev: Ev::Param(a.param.clone(), last.value) });
+    };
+    for a in &autos {
+        let mut evs = std::mem::take(&mut tracks[a.track].events);
+        expand_auto(a, &mut evs);
+        tracks[a.track].events = evs;
+    }
+    for a in &mix_autos {
+        let mut evs = std::mem::take(&mut mix_tracks[a.track].events);
+        expand_auto(a, &mut evs);
+        mix_tracks[a.track].events = evs;
     }
 
     for tr in tracks.iter_mut() {
         tr.events.sort_by_key(|e| e.sample);
     }
-    Ok((bpm0, tracks))
+    for tr in mix_tracks.iter_mut() {
+        tr.events.sort_by_key(|e| e.sample);
+    }
+    Ok((bpm0, tracks, mix_tracks))
 }
 

@@ -120,6 +120,17 @@ enum NodeState {
     Phase(f64),
     Unison { ph: Vec<f64>, det: Vec<f64>, pan: Vec<f64> },
     Svf { ic1: [f64; 4], ic2: [f64; 4] }, // [ch*2 + stage]
+    // EQ parametrico RBJ (peak/lowshelf/highshelf): DF1 estereo + cache de coefs
+    Biquad {
+        x1: [f64; 2],
+        x2: [f64; 2],
+        y1: [f64; 2],
+        y2: [f64; 2],
+        cf: f64, // (freq, gain, q) que geraram c - recalcula so na mudanca
+        cg: f64,
+        cq: f64,
+        c: [f64; 5], // b0 b1 b2 a1 a2 (normalizados por a0)
+    },
     Env(EnvState),
     Lfo { ph: f64, hold: f64, rng: u64 },
     Rng(u64),
@@ -628,11 +639,13 @@ impl StateStore {
         if self.slots.is_empty() {
             self.base = id;
         } else if id < self.base {
-            // rebase (rare: only while the range is being discovered)
+            // rebase (rare: only while the range is being discovered) - um
+            // prepend unico O(n+shift), nunca insert(0) em loop (O(n*shift))
             let shift = self.base - id;
-            for _ in 0..shift {
-                self.slots.insert(0, None);
-            }
+            let mut new: Vec<Option<NodeStateBox>> = Vec::with_capacity(self.slots.len() + shift);
+            new.resize_with(shift, || None);
+            new.append(&mut self.slots);
+            self.slots = new;
             self.base = id;
         }
         let i = id - self.base;
@@ -1157,6 +1170,98 @@ fn eval_call(op: Op, args: &[(String, Expr)], id: usize, ctx: &mut Ctx) -> Val {
                 if mono {
                     // keep right channel state in sync for later stereo use
                     let _ = run(r, 1);
+                    Val::S(ol)
+                } else {
+                    let or = run(r, 1);
+                    Val::St2(ol, or)
+                }
+            } else {
+                Val::S(0.0)
+            }
+        }
+        Op::Peak | Op::LowShelf | Op::HighShelf => {
+            // EQ parametrico (biquads RBJ): peak(freq, gain, q) e shelves
+            // (freq, gain, q opcional - 0.7071 = slope classico S=1).
+            // gain literal em db ja chega linear do parser; RBJ quer
+            // A = 10^(db/40) = sqrt(linear). Coefs recalculados so quando
+            // (freq, gain, q) mudam (automacao e a block-rate, barato).
+            let sig = input_sig(args, ctx);
+            let f0 = eval_arg(args, "freq", Val::Hz(1000.0), ctx)
+                .as_hz()
+                .clamp(10.0, (ctx.sr * 0.49).min(21000.0));
+            let glin = eval_arg(args, "gain", Val::S(1.0), ctx).num().clamp(1e-4, 1e4);
+            let q = eval_arg(args, "q", Val::S(0.7071), ctx).num().clamp(0.05, 18.0);
+            let st = ctx.state.get_or(id, || {
+                NodeStateBox(NodeState::Biquad {
+                    x1: [0.0; 2],
+                    x2: [0.0; 2],
+                    y1: [0.0; 2],
+                    y2: [0.0; 2],
+                    cf: -1.0,
+                    cg: 0.0,
+                    cq: 0.0,
+                    c: [1.0, 0.0, 0.0, 0.0, 0.0],
+                })
+            });
+            if let NodeStateBox(NodeState::Biquad { x1, x2, y1, y2, cf, cg, cq, c }) = st {
+                if *cf != f0 || *cg != glin || *cq != q {
+                    *cf = f0;
+                    *cg = glin;
+                    *cq = q;
+                    let a = glin.sqrt();
+                    let w0 = 2.0 * std::f64::consts::PI * f0 / ctx.sr;
+                    let (sn, cs) = w0.sin_cos();
+                    let alpha = sn / (2.0 * q);
+                    let (b0, b1, b2, a0, a1, a2) = match op {
+                        Op::Peak => (
+                            1.0 + alpha * a,
+                            -2.0 * cs,
+                            1.0 - alpha * a,
+                            1.0 + alpha / a,
+                            -2.0 * cs,
+                            1.0 - alpha / a,
+                        ),
+                        Op::LowShelf => {
+                            let sa = 2.0 * a.sqrt() * alpha;
+                            (
+                                a * ((a + 1.0) - (a - 1.0) * cs + sa),
+                                2.0 * a * ((a - 1.0) - (a + 1.0) * cs),
+                                a * ((a + 1.0) - (a - 1.0) * cs - sa),
+                                (a + 1.0) + (a - 1.0) * cs + sa,
+                                -2.0 * ((a - 1.0) + (a + 1.0) * cs),
+                                (a + 1.0) + (a - 1.0) * cs - sa,
+                            )
+                        }
+                        _ => {
+                            // highshelf
+                            let sa = 2.0 * a.sqrt() * alpha;
+                            (
+                                a * ((a + 1.0) + (a - 1.0) * cs + sa),
+                                -2.0 * a * ((a - 1.0) + (a + 1.0) * cs),
+                                a * ((a + 1.0) + (a - 1.0) * cs - sa),
+                                (a + 1.0) - (a - 1.0) * cs + sa,
+                                2.0 * ((a - 1.0) - (a + 1.0) * cs),
+                                (a + 1.0) - (a - 1.0) * cs - sa,
+                            )
+                        }
+                    };
+                    *c = [b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0];
+                }
+                let (l, r) = sig.stereo();
+                let mono = !matches!(sig, Val::St2(_, _));
+                let mut run = |x: f64, ch: usize| -> f64 {
+                    let y = c[0] * x + c[1] * x1[ch] + c[2] * x2[ch]
+                        - c[3] * y1[ch]
+                        - c[4] * y2[ch];
+                    x2[ch] = x1[ch];
+                    x1[ch] = x;
+                    y2[ch] = y1[ch];
+                    y1[ch] = y;
+                    y
+                };
+                let ol = run(l, 0);
+                if mono {
+                    let _ = run(r, 1); // mantem o estado do canal direito em sincronia
                     Val::S(ol)
                 } else {
                     let or = run(r, 1);
@@ -3937,6 +4042,289 @@ impl MasterChain {
             }
         }
         sig.stereo()
+    }
+}
+
+// ---------- mixer: grafo de canais com inserts, sends e roteamento ----------
+
+struct MixSend {
+    target: usize,
+    level_t: f64, // alvo linear (automatavel via send.<canal>)
+    level_s: f64, // suavizado (one-pole ~15ms, sem zipper)
+    pre: bool,    // pre-fader (antes de gain/pan; default pos)
+}
+
+pub struct MixChannel {
+    pub name: String,
+    chain: Vec<Expr>,
+    state: StateStore,
+    pub gain_t: f64, // alvo linear
+    pub pan_t: f64,  // -1..1
+    gain_s: f64,
+    pan_s: f64,
+    sends: Vec<MixSend>,
+    out: Option<usize>, // None = master
+    params_named: HashMap<String, Val>,
+    param_units: HashMap<String, Val>, // tipo do default (preserva unidade no set)
+    pub in_l: f64, // acumulador de entrada deste sample
+    pub in_r: f64,
+    pub last_out: (f64, f64), // pos-fader (capturado como stem no mix report)
+}
+
+/// Mixer offline: canais processados em ordem topologica por sample.
+/// Cada canal soma entradas (synths roteados + outs/sends de outros canais),
+/// roda a cadeia de inserts (mesmos nos do bus), aplica pan equal-power
+/// (centro = unity) e gain suavizados, distribui sends e roteia.
+/// Saida pos-fader publicada em synth_outs pelo NOME do canal - sidechain
+/// entre canais e' `key: <canal>` em qualquer insert.
+pub struct Mixer {
+    pub channels: Vec<MixChannel>,
+    order: Vec<usize>,
+    sr: f64,
+    pub bpm: f64,
+    smooth_k: f64,
+}
+
+impl Mixer {
+    pub fn new(def: crate::parser::MixerDef, sr: f64, bpm: f64) -> Result<Self, String> {
+        let names: Vec<String> = def.channels.iter().map(|c| c.name.clone()).collect();
+        let find = |n: &str| names.iter().position(|x| x == n);
+        let mut channels = Vec::new();
+        for (ci, ch) in def.channels.into_iter().enumerate() {
+            let mut chain = ch.chain;
+            crate::resolve::resolve_master(&mut chain);
+            let mut sends = Vec::new();
+            for s in ch.sends {
+                let t = find(&s.target).ok_or(format!(
+                    "E043 channel '{}': send para canal desconhecido '{}'",
+                    ch.name, s.target
+                ))?;
+                if t == ci {
+                    return Err(format!("E044 channel '{}': send para si mesmo", ch.name));
+                }
+                sends.push(MixSend { target: t, level_t: s.level, level_s: s.level, pre: s.pre });
+            }
+            let out = if ch.out == "master" {
+                None
+            } else {
+                Some(find(&ch.out).ok_or(format!(
+                    "E043 channel '{}': out para canal desconhecido '{}'",
+                    ch.name, ch.out
+                ))?)
+            };
+            if out == Some(ci) {
+                return Err(format!("E044 channel '{}': out para si mesmo", ch.name));
+            }
+            // defaults dos params do canal (mesma avaliacao dos params de synth)
+            let mut params_named = HashMap::new();
+            let mut param_units = HashMap::new();
+            for p in &ch.params {
+                let mut dummy = StateStore::new();
+                let mut ctx = Ctx {
+                    sr,
+                    bpm,
+                    note: 60.0,
+                    vel: 0.0,
+                    gate: 0.0,
+                    time: 0.0,
+                    rand: 0.0,
+                    vidx: 0.0,
+                    dur: 0.0,
+                    state: &mut dummy,
+                    cur: &[],
+                    prev: &[],
+                    globals: &[],
+                    params: &[],
+                    bus_in: Val::S(0.0),
+                    synth_outs: None,
+                    params_by_name: None,
+                    seed: 1,
+                };
+                let v = eval(&p.default, &mut ctx);
+                params_named.insert(p.name.clone(), v);
+                param_units.insert(p.name.clone(), v);
+            }
+            channels.push(MixChannel {
+                name: ch.name,
+                chain,
+                state: StateStore::new(),
+                gain_t: ch.gain,
+                pan_t: ch.pan,
+                gain_s: ch.gain,
+                pan_s: ch.pan,
+                sends,
+                out,
+                params_named,
+                param_units,
+                in_l: 0.0,
+                in_r: 0.0,
+                last_out: (0.0, 0.0),
+            });
+        }
+        // ordem topologica (Kahn) sobre arestas out/send; ciclo = erro
+        let n = channels.len();
+        let mut indeg = vec![0usize; n];
+        for ch in &channels {
+            if let Some(t) = ch.out {
+                indeg[t] += 1;
+            }
+            for s in &ch.sends {
+                indeg[s.target] += 1;
+            }
+        }
+        let mut queue: Vec<usize> = (0..n).filter(|&i| indeg[i] == 0).collect();
+        let mut order = Vec::with_capacity(n);
+        while let Some(i) = queue.pop() {
+            order.push(i);
+            let targets: Vec<usize> = channels[i]
+                .out
+                .iter()
+                .copied()
+                .chain(channels[i].sends.iter().map(|s| s.target))
+                .collect();
+            for t in targets {
+                indeg[t] -= 1;
+                if indeg[t] == 0 {
+                    queue.push(t);
+                }
+            }
+        }
+        if order.len() != n {
+            let stuck: Vec<&str> = (0..n)
+                .filter(|&i| !order.contains(&i))
+                .map(|i| channels[i].name.as_str())
+                .collect();
+            return Err(format!("E044 mixer: ciclo de roteamento entre: {}", stuck.join(", ")));
+        }
+        // determinismo: ordem estavel por indice entre canais independentes
+        // (Kahn com pop() ja e determinista, mas ordena grupos por indice)
+        let smooth_k = 1.0 - (-1.0 / (sr * 0.015)).exp();
+        Ok(Mixer { channels, order, sr, bpm, smooth_k })
+    }
+
+    pub fn index_of(&self, name: &str) -> Option<usize> {
+        self.channels.iter().position(|c| c.name == name)
+    }
+
+    /// set/automate vindos do score: gain e send.<canal> em db, pan -1..1,
+    /// params declarados no canal em valor cru (unidade do default)
+    pub fn set_channel_param(&mut self, chan: usize, param: &str, v: f64) {
+        let ch = &mut self.channels[chan];
+        if param == "gain" {
+            ch.gain_t = 10f64.powf(v / 20.0);
+        } else if param == "pan" {
+            ch.pan_t = v.clamp(-1.0, 1.0);
+        } else if let Some(t) = param.strip_prefix("send.") {
+            let lin = 10f64.powf(v / 20.0);
+            let names: Vec<String> = self.channels.iter().map(|c| c.name.clone()).collect();
+            let ti = names.iter().position(|x| x == t);
+            let ch = &mut self.channels[chan];
+            if let Some(ti) = ti {
+                for s in ch.sends.iter_mut() {
+                    if s.target == ti {
+                        s.level_t = lin;
+                    }
+                }
+            }
+        } else {
+            let nv = match ch.param_units.get(param) {
+                Some(Val::Hz(_)) => Val::Hz(v),
+                Some(Val::Ms(_)) => Val::Ms(v),
+                Some(Val::Pitch(_)) => Val::Pitch(v),
+                _ => Val::S(v),
+            };
+            ch.params_named.insert(param.to_string(), nv);
+        }
+    }
+
+    /// entrada de um synth roteado (chamado por sample, antes de process_sample)
+    pub fn feed(&mut self, chan: usize, l: f64, r: f64) {
+        self.channels[chan].in_l += l;
+        self.channels[chan].in_r += r;
+    }
+
+    /// processa um sample do grafo inteiro; retorna a contribuicao pro master.
+    /// publica a saida pos-fader de cada canal em synth_outs (sidechain).
+    pub fn process_sample(
+        &mut self,
+        synth_outs: &mut HashMap<String, (f64, f64)>,
+    ) -> (f64, f64) {
+        let mut master = (0.0f64, 0.0f64);
+        let k = self.smooth_k;
+        for oi in 0..self.order.len() {
+            let ci = self.order[oi];
+            // cadeia de inserts (nos identicos ao bus; ids +3M isolam rng/estado)
+            let ch = &mut self.channels[ci];
+            let mut sig = Val::St2(ch.in_l, ch.in_r);
+            ch.in_l = 0.0;
+            ch.in_r = 0.0;
+            let MixChannel { chain, state, params_named, gain_t, gain_s, pan_t, pan_s, name, out, last_out, .. } = &mut *ch;
+            for call in chain.iter() {
+                if let Expr::Call { op, args, id, .. } = call {
+                    let mut ctx = Ctx {
+                        sr: self.sr,
+                        bpm: self.bpm,
+                        note: 60.0,
+                        vel: 0.0,
+                        gate: 0.0,
+                        time: 0.0,
+                        rand: 0.0,
+                        vidx: 0.0,
+                        dur: 0.0,
+                        state: &mut *state,
+                        cur: &[],
+                        prev: &[],
+                        globals: &[],
+                        params: &[],
+                        bus_in: sig,
+                        synth_outs: Some(synth_outs),
+                        params_by_name: Some(params_named),
+                        seed: 5000 + ci as u64,
+                    };
+                    sig = eval_call(*op, args, *id + 3_000_000, &mut ctx);
+                }
+            }
+            let (pl, pr) = sig.stereo();
+            // fader: gain e pan suavizados (one-pole ~15ms)
+            *gain_s += k * (*gain_t - *gain_s);
+            *pan_s += k * (*pan_t - *pan_s);
+            // pan equal-power com centro unity (+3db na borda)
+            let p = pan_s.clamp(-1.0, 1.0);
+            let gl = ((1.0 - p) * 0.5).sqrt() * std::f64::consts::SQRT_2;
+            let gr = ((1.0 + p) * 0.5).sqrt() * std::f64::consts::SQRT_2;
+            let post = (pl * *gain_s * gl, pr * *gain_s * gr);
+            *last_out = post;
+            // get_mut primeiro: clona a chave so no primeiro sample
+            match synth_outs.get_mut(name.as_str()) {
+                Some(slot) => *slot = post,
+                None => {
+                    synth_outs.insert(name.clone(), post);
+                }
+            }
+            let out = *out;
+            // sends: pre = pos-inserts/pre-fader, pos = depois de gain/pan
+            let nsends = ch.sends.len();
+            for si in 0..nsends {
+                let ch = &mut self.channels[ci];
+                let s = &mut ch.sends[si];
+                s.level_s += k * (s.level_t - s.level_s);
+                let (sl, srr) = if s.pre { (pl, pr) } else { post };
+                let (lvl, tgt) = (s.level_s, s.target);
+                self.channels[tgt].in_l += sl * lvl;
+                self.channels[tgt].in_r += srr * lvl;
+            }
+            match out {
+                Some(t) => {
+                    self.channels[t].in_l += post.0;
+                    self.channels[t].in_r += post.1;
+                }
+                None => {
+                    master.0 += post.0;
+                    master.1 += post.1;
+                }
+            }
+        }
+        master
     }
 }
 

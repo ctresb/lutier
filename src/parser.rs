@@ -69,6 +69,9 @@ pub enum Op {
     Highpass,
     Bandpass,
     Notch,
+    Peak,
+    LowShelf,
+    HighShelf,
     Lfo,
     Saturate,
     Clip,
@@ -128,6 +131,9 @@ impl Op {
             "highpass" => Op::Highpass,
             "bandpass" => Op::Bandpass,
             "notch" => Op::Notch,
+            "peak" => Op::Peak,
+            "lowshelf" => Op::LowShelf,
+            "highshelf" => Op::HighShelf,
             "lfo" => Op::Lfo,
             "saturate" => Op::Saturate,
             "clip" => Op::Clip,
@@ -202,6 +208,48 @@ pub struct ParamDef {
 pub struct ParsedFile {
     pub defs: Vec<SynthDef>,
     pub master: Option<MasterDef>,
+    /// plugins de usuario: cadeias de fx parametrizadas, expandidas inline
+    /// em qualquer posicao de chain (bus de synth, canal do mixer, master)
+    pub fx: Vec<FxDef>,
+    pub mixer: Option<MixerDef>,
+    /// primeiro id livre depois do parse (expansao de fx aloca a partir daqui)
+    pub next_id: usize,
+}
+
+/// fx nome(param: default, ...) { chain } - plugin definido em DSL puro.
+/// Instanciar = macro: params substituidos pelos args, node ids re-semeados.
+#[derive(Debug, Clone)]
+pub struct FxDef {
+    pub name: String,
+    pub params: Vec<(String, Expr)>,
+    pub chain: Vec<Expr>,
+}
+
+/// send pos-fader (ou pre) de um canal para outro
+#[derive(Debug, Clone)]
+pub struct SendDef {
+    pub target: String,
+    pub level: f64, // linear
+    pub pre: bool,
+}
+
+/// canal de mixer: recebe synths (in:), passa pela cadeia de inserts,
+/// aplica gain/pan, manda sends e roteia pra out (master ou outro canal)
+#[derive(Debug, Clone)]
+pub struct ChannelDef {
+    pub name: String,
+    pub inputs: Vec<String>,
+    pub params: Vec<ParamDef>,
+    pub chain: Vec<Expr>,
+    pub gain: f64, // linear
+    pub pan: f64,  // -1..1
+    pub sends: Vec<SendDef>,
+    pub out: String, // "master" ou nome de canal
+}
+
+#[derive(Debug, Clone)]
+pub struct MixerDef {
+    pub channels: Vec<ChannelDef>,
 }
 
 #[derive(Debug, Clone)]
@@ -309,13 +357,20 @@ impl Parser {
     }
 
     fn parse_file_depth(&mut self, depth: usize) -> Result<ParsedFile, String> {
-        let mut file = ParsedFile { defs: Vec::new(), master: None };
+        let mut file =
+            ParsedFile { defs: Vec::new(), master: None, fx: Vec::new(), mixer: None, next_id: 0 };
         while self.peek().is_some() {
             if self.eat_id("synth") {
                 let d = self.parse_synth()?;
                 // local definitions override earlier imports with the same name
                 file.defs.retain(|x| x.name != d.name);
                 file.defs.push(d);
+            } else if self.eat_id("fx") {
+                let f = self.parse_fx()?;
+                file.fx.retain(|x| x.name != f.name);
+                file.fx.push(f);
+            } else if self.eat_id("mixer") {
+                file.mixer = Some(self.parse_mixer()?);
             } else if self.eat_id("master") {
                 file.master = Some(self.parse_master()?);
             } else if self.eat_id("import") {
@@ -344,10 +399,18 @@ impl Parser {
                         file.defs.push(d);
                     }
                 }
+                for f in imported.fx {
+                    // fx importados seguem a mesma regra dos synths (local vence)
+                    if !file.fx.iter().any(|x| x.name == f.name) {
+                        file.fx.push(f);
+                    }
+                }
+                // master e mixer de imports sao ignorados (a peca define os seus)
             } else {
                 return Err(format!("expected 'synth', 'master' or 'import', got {:?}", self.peek()));
             }
         }
+        file.next_id = self.next_id + 1_000_000; // margem sobre ids de imports
         Ok(file)
     }
 
@@ -362,6 +425,119 @@ impl Parser {
             }
         }
         Ok(m)
+    }
+
+    /// fx nome(param: default, ...) { <chain> }
+    fn parse_fx(&mut self) -> Result<FxDef, String> {
+        let name = self.expect_id()?;
+        let mut params: Vec<(String, Expr)> = Vec::new();
+        if self.eat_sym("(") {
+            if !self.eat_sym(")") {
+                loop {
+                    let pname = self.expect_id()?;
+                    self.expect_sym(":")?;
+                    let def = self.parse_expr()?;
+                    params.push((pname, def));
+                    if self.eat_sym(",") {
+                        continue;
+                    }
+                    self.expect_sym(")")?;
+                    break;
+                }
+            }
+        }
+        self.expect_sym("{")?;
+        let mut chain = Vec::new();
+        while !self.eat_sym("}") {
+            chain.push(self.parse_expr()?);
+        }
+        Ok(FxDef { name, params, chain })
+    }
+
+    /// mixer { channel nome { in: a, b  <inserts>  gain -3db  pan -0.2
+    ///         send outro -12db [pre]  out master } ... }
+    fn parse_mixer(&mut self) -> Result<MixerDef, String> {
+        self.expect_sym("{")?;
+        let mut m = MixerDef { channels: Vec::new() };
+        while !self.eat_sym("}") {
+            if !self.eat_id("channel") {
+                return Err(format!("{}mixer: expected 'channel', got {:?}", self.here(), self.peek()));
+            }
+            m.channels.push(self.parse_channel()?);
+        }
+        Ok(m)
+    }
+
+    fn parse_channel(&mut self) -> Result<ChannelDef, String> {
+        let name = self.expect_id()?;
+        self.expect_sym("{")?;
+        let mut ch = ChannelDef {
+            name,
+            inputs: Vec::new(),
+            params: Vec::new(),
+            chain: Vec::new(),
+            gain: 1.0,
+            pan: 0.0,
+            sends: Vec::new(),
+            out: "master".to_string(),
+        };
+        loop {
+            if self.eat_sym("}") {
+                break;
+            }
+            let here = self.here();
+            let kw = self.expect_id()?;
+            // gain/pan sao teclas do canal OU nos de insert (gain(...) / pan(...))
+            let is_call = self.peek() == Some(&Tok::Sym("(".into()));
+            match kw.as_str() {
+                "in" if !is_call => {
+                    self.eat_sym(":");
+                    ch.inputs.push(self.expect_id()?);
+                    while self.eat_sym(",") {
+                        ch.inputs.push(self.expect_id()?);
+                    }
+                }
+                "param" => {
+                    ch.params.push(self.parse_param()?);
+                }
+                "gain" if !is_call => {
+                    self.eat_sym(":");
+                    ch.gain = self.parse_signed_literal_linear()?;
+                }
+                "pan" if !is_call => {
+                    self.eat_sym(":");
+                    let neg = self.eat_sym("-");
+                    let v = match self.next()? {
+                        Tok::Num(v, _) => v,
+                        t => return Err(format!("{}pan expects literal, got {:?}", here, t)),
+                    };
+                    ch.pan = (if neg { -v } else { v }).clamp(-1.0, 1.0);
+                }
+                "send" => {
+                    let target = self.expect_id()?;
+                    self.eat_sym(":");
+                    let level = self.parse_signed_literal_linear()?;
+                    let pre = self.eat_id("pre");
+                    ch.sends.push(SendDef { target, level, pre });
+                }
+                "out" if !is_call => {
+                    self.eat_sym(":");
+                    ch.out = self.expect_id()?;
+                }
+                _ => {
+                    // insert slot: qualquer call (no builtin ou fx de usuario)
+                    if !self.eat_sym("(") {
+                        return Err(format!(
+                            "{}channel: '{}' nao e keyword de canal nem call de insert",
+                            here, kw
+                        ));
+                    }
+                    let call = self.parse_call(kw)?;
+                    ch.chain.push(call);
+                }
+            }
+        }
+        Ok(ch)
     }
 
     fn parse_synth(&mut self) -> Result<SynthDef, String> {

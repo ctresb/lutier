@@ -342,6 +342,45 @@ fn check_master(m: &MasterDef, out: &mut Vec<String>) {
     }
 }
 
+fn check_mixer(file: &ParsedFile, synth_names: &HashSet<String>, out: &mut Vec<String>) {
+    let Some(mx) = &file.mixer else { return };
+    let fx_names: HashSet<&str> = file.fx.iter().map(|f| f.name.as_str()).collect();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for ch in &mx.channels {
+        if !seen.insert(ch.name.as_str()) {
+            out.push(format!("E040 mixer: canal '{}' duplicado", ch.name));
+        }
+        // nome de canal = chave de sidechain em synth_outs; colidir com synth
+        // tornaria `key: nome` ambiguo
+        if synth_names.contains(&ch.name) {
+            out.push(format!(
+                "E041 mixer: canal '{}' tem o mesmo nome de um synth - renomeie um dos dois",
+                ch.name
+            ));
+        }
+        for input in &ch.inputs {
+            if !synth_names.contains(input) {
+                out.push(format!(
+                    "E042 mixer: canal '{}' recebe synth desconhecido '{}' (in:)",
+                    ch.name, input
+                ));
+            }
+        }
+        // inserts precisam ser nos conhecidos ou fx definidos (call desconhecida
+        // avaliaria 0.0 e mutaria o canal em silencio)
+        for e in &ch.chain {
+            if let Expr::Call { name, op, .. } = e {
+                if *op == crate::parser::Op::Unknown && !fx_names.contains(name.as_str()) {
+                    out.push(format!(
+                        "E045 mixer: canal '{}': insert '{}' nao e no da engine nem fx definido",
+                        ch.name, name
+                    ));
+                }
+            }
+        }
+    }
+}
+
 pub fn check_file(file: &ParsedFile) -> Vec<String> {
     let mut out = Vec::new();
     let synth_names: HashSet<String> = file.defs.iter().map(|d| d.name.clone()).collect();
@@ -351,5 +390,6 @@ pub fn check_file(file: &ParsedFile) -> Vec<String> {
     if let Some(m) = &file.master {
         check_master(m, &mut out);
     }
+    check_mixer(file, &synth_names, &mut out);
     out
 }
