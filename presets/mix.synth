@@ -1,0 +1,75 @@
+# presets/mix.synth - biblioteca de fx de mixagem (plugins em DSL puro).
+# Cada fx e uma cadeia parametrizada: instancie em qualquer canal do mixer,
+# bus de synth ou master. Args nomeados, defaults neutros (fx sem args = som
+# intacto ou tratamento leve). Convencao: amount em db onde e ganho de banda.
+#
+#   import "presets/mix.synth"
+#   mixer { channel voz { in: flauta  eq3(mid: 2db)  presenca(amount: -3db) } }
+
+# EQ de 3 bandas classico: shelves nas pontas + sino no meio.
+# fmid/q ajustam onde o "meio" mora (900hz pega corpo de melodia).
+fx eq3(low: 0db, mid: 0db, high: 0db, fmid: 900hz, q: 0.9) {
+    lowshelf(freq: 220hz, gain: low)
+    peak(freq: fmid, gain: mid, q: q)
+    highshelf(freq: 5khz, gain: high)
+}
+
+# corta lama de 150-350hz (acumulo tipico quando varios instrumentos de
+# corpo medio tocam juntos). Sino largo, corte suave.
+fx limpa_lama(amount: -3db, freq: 250hz) {
+    peak(freq: freq, gain: amount, q: 0.7)
+}
+
+# tira o rumble abaixo do util (highpass 12db). Em tudo que nao e baixo,
+# 80-120hz libera espaco pra fundacao respirar.
+fx limpa_grave(freq: 90hz) {
+    highpass(cutoff: freq, q: 0.5)
+}
+
+# presenca (2-6khz): a banda que faz "gritar" - o alerta de ESTRIDENCIA do
+# --mix-report aponta pra ca. Negativo doma flauta/cordas estridentes SEM
+# perder o nivel percebido (loudness vive em 250-2k).
+fx presenca(amount: 0db, freq: 3khz) {
+    peak(freq: freq, gain: amount, q: 0.8)
+}
+
+# ar (10khz+): brilho de fita/sala boa. Sutil: +2db ja aparece.
+fx ar(amount: 2db) {
+    highshelf(freq: 9khz, gain: amount, q: 0.6)
+}
+
+# calor: shelf grave leve + sombra no agudo alto (curva de "fita").
+fx calor(amount: 2db) {
+    lowshelf(freq: 180hz, gain: amount, q: 0.6)
+    highshelf(freq: 11khz, gain: -1.5db, q: 0.6)
+}
+
+# cola de grupo: compressao lenta e rasa que faz o canal "respirar junto"
+# sem bombear. Para buses de secao (cordas, bateria inteira).
+fx cola(threshold: -20db, amount: 0.7) {
+    compressor(threshold: threshold, ratio: 2, attack: 25ms, release: 220ms, amount: amount, makeup: auto)
+}
+
+# controle de dinamica de melodia: mais rapido que a cola, nivela frases
+# (o pp aparece, o ff nao fura). Presenca constante sem subir velocity.
+fx nivela(threshold: -24db, ratio: 3) {
+    compressor(threshold: threshold, ratio: ratio, attack: 8ms, release: 120ms, makeup: auto)
+}
+
+# ducking sidechain: abaixa este canal quando `alvo` toca (voz sobre cama,
+# kick sobre baixo). alvo = nome de synth OU de canal do mixer.
+fx abre_espaco(alvo: 0, amount: 0.6, release: 180ms) {
+    duck(key: alvo, threshold: -30db, ratio: 8, attack: 4ms, release: release, amount: amount)
+}
+
+# telefone / radinho: bandpass estreito, tira pontas. Efeito, nao correcao.
+fx telefone(freq: 1.4khz) {
+    bandpass(cutoff: freq, q: 0.9)
+    gain(amount: 2.0)
+}
+
+# largura estereo via M/S (0 = intacto, 1 = o dobro do lado). O widen nunca
+# toca no M: mono-compativel por construcao.
+fx largura(amount: 0.5) {
+    widen(amount: amount)
+}
