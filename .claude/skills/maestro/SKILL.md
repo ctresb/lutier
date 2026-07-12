@@ -55,6 +55,9 @@ import "presets/strings.synth"   # CORDAS SOTA (fisica v2, prefira sobre physica
                                  # banjo, ukulele, bandolim (cursos duplos)
                                  # NAO importe physical.synth E strings.synth juntos: nomes repetidos
                                  # (violino/cello/secao_violinos) resolvem pro PRIMEIRO import
+import "presets/mix.synth"       # fx de MIXAGEM p/ canais do mixer (secao 2):
+                                 # eq3, limpa_lama, limpa_grave, presenca, ar, calor,
+                                 # cola, nivela, abre_espaco (sidechain), telefone, largura
 ```
 
 Referências para estudar antes de compor: `tests/fixtures/` (`everything`
@@ -91,6 +94,61 @@ master {
 
 SFX solo: `bus_gain 6db` (one-shot não enche o pré-ganho). Batida pesada
 (funk/trap): `ratio: 3, attack: 8ms` soca mais.
+
+### 2.1 MIXER (canais, inserts, sends - use em TODA peça com 3+ instrumentos)
+
+O bloco `mixer` no .synth agrupa synths em canais com slots de efeito, fader
+automatizável e sends - presença e timbre viram controles de MIX, separados
+do gesto (a solução para "velocity alta = estridente" dos instrumentos físicos):
+
+```txt
+import "presets/mix.synth"
+
+mixer {
+  channel melodia {
+    in: flauta, violino          # synths do score roteados pra cá
+    param corpo: db = 0db        # param de canal, automatizável no score
+    eq3(mid: corpo, high: 1db)   # inserts: qualquer nó de bus OU fx de usuário
+    presenca(amount: -2db)       # doma 2-6khz SEM perder loudness (estridência!)
+    nivela(threshold: -22db)     # compressor de frase: pp aparece, ff não fura
+    gain -3db                    # fader (automatizável, suavizado ~15ms)
+    pan -0.15                    # equal-power, centro unity
+    send sala: -12db             # pós-fader (padrão); `pre` = pré-fader
+  }
+  channel cama {
+    in: strings_warm
+    limpa_grave(freq: 100hz)
+    abre_espaco(alvo: pulso, amount: 0.5)   # sidechain: alvo = synth OU canal
+    gain -6db
+    send sala: -18db pre
+  }
+  channel pulso { in: kick_deep  gain -2db }
+  channel sala {                 # canal SEM in: = bus de retorno (reverb compartilhado)
+    reverb(mix: 1.0, size: 0.85, damp: 4khz)
+    gain -8db
+    out master                   # roteamento; pode apontar pra outro canal (grupos)
+  }
+}
+```
+
+- Synth sem canal soma direto no master (retrocompatível).
+- Sidechain entre canais: `key:`/`alvo:` aceita nome de CANAL (saída pós-fader).
+- Ciclo de roteamento = E044; insert com nome errado = E045 (nunca muda em silêncio).
+- EQ paramétrico nativo: `peak(freq, gain, q)`, `lowshelf/highshelf(freq, gain, q)`.
+  gain em db (negativo corta). É a ferramenta cirúrgica; os fx de mix.synth são as receitas.
+
+### 2.2 fx - plugins de usuário (DSL pura, zero Rust)
+
+`fx nome(param: default, ...) { cadeia }` no topo do arquivo define um plugin:
+instanciável em qualquer canal, bus de synth ou master; params viram os args
+da chamada; fx pode compor fx (recursivo). Importável via `import`.
+
+```txt
+fx meu_brilho(quanto: 2db, onde: 8khz) {
+  highshelf(freq: onde, gain: quanto, q: 0.6)
+  saturate(amount: 0.1)
+}
+```
 
 ## 3. Melodia, harmonia e arranjo (a diferença entre tocar e emocionar)
 
@@ -236,6 +294,17 @@ arrange intro climax intro  # timeline = concatenação; NÃO misture com evento
 Notas: `c0..b8`, `#`/`b` (`a#2`, `db4`). Automação: declarar ANTES das sections,
 beats absolutos da timeline final. Curvas: `lin`, `exp`, `log`, `pow(n)`.
 
+Automação de MIXER no score (contexto `mixer <canal>`, como `track`):
+
+```txt
+mixer melodia
+set gain -3                      # gain e send.<canal> em DB; pan -1..1
+automate gain 0 -12 -> 8 -3 curve exp
+automate pan 0 -0.3 -> 16 0.3
+automate send.sala 0 -30 -> 16 -10
+set corpo 2                      # param declarado no canal: valor cru
+```
+
 ## 7. Sintaxe .synth essencial (para custom/edição)
 
 ```txt
@@ -340,6 +409,7 @@ synth nome {
 - `hall(sig, size, decay, damp, mix)` - sala SDN; mix ≤ 10% (densidade modal baixa).
 
 **Processadores**: `lowpass/highpass/bandpass/notch(sig, cutoff, q 0..1.2, slope: 24db)`,
+`peak/lowshelf/highshelf(sig, freq, gain, q)` (EQ paramétrico RBJ; gain em db),
 `saturate/drive(sig, amount)`, `clip(sig, level)`, `follower(sig, attack, release)`,
 `rms(sig, window)`, `ringmod(a, b)`, `pan(sig, pos)`, `gain`, `min/max/clamp/abs`,
 `unipolar(x)` (-1..1 -> 0..1), `hz(pitch)`, `delay(sig, time, feedback)` (curto, física),
@@ -376,6 +446,31 @@ Unidades: `hz khz ms s db % st ct beat` (`3/8beat` sync ao bpm).
   de tracks (compartilhe bus/master).
 
 ## 9. Verificação (obrigatória antes de entregar)
+
+### 9.1 Mix por stem: `--mix-report` (SEMPRE, antes de qualquer outra análise)
+
+```bash
+cargo run --release -- song.synth song.score -o out/song.wav --seed 1 --mix-report
+```
+
+Imprime por stem (cada synth + cada canal `[nome]` + MASTER): **LUFS integrada
+(BS.1770 com gating - loudness PERCEBIDA, não pico!)**, pico dbfs, crest
+(transiente vs sustentado), % de energia por banda (20-250/250-2k/2k-6k/6k+),
+correlação estéreo, % de tempo ativo. E acusa sozinho:
+
+- `ESTRIDENCIA`: stem de melodia com >35% da energia em 2-6khz perto do topo
+  da mix -> `presenca(amount: -2db a -4db)` no canal, NÃO abaixe velocity.
+- `SUMIDO`: stem ativo 18+ LU abaixo do mais alto -> suba o `gain` DO CANAL
+  (não o do synth, não velocity).
+- `MASCARAMENTO`: dois stems altos dominados pela mesma banda -> EQ
+  complementar (corta num o que realça no outro) ou `abre_espaco`.
+
+Alvos de LUFS relativos (referência = stem mais alto): melodia 0 a -3 LU,
+fundação -3 a -6, pulso -3 a -7, cama -8 a -14, brilho -12 a -18. Crest alto
+(>18db) = percussivo: confie no LUFS, não no pico. Ao mexer, mexa no MIXER
+(gain/EQ do canal); gain de preset é calibração de fábrica, não de peça.
+
+### 9.2 Arco e espectro por janela (python)
 
 ```bash
 python3 - <<'EOF'
@@ -427,4 +522,5 @@ Critérios de aceitação:
   (`arrange intro drop intro` -> loop de jogo perfeito).
 - Loop para jogo: termine a última seção no acorde do início e corte a cauda de 4s
   no pós, ou peça fade.
-- Stems: renderize o mesmo .score várias vezes comentando tracks (o render é rápido).
+- Stems: `--mix-report` já mede por stem num render só; para OUVIR um stem
+  isolado, renderize comentando tracks (o render é rápido).

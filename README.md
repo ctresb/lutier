@@ -56,6 +56,7 @@ cargo run --release -- <patch.synth> <song.score> -o out/song.wav
 | `-o <arquivo.wav>` | Caminho do WAV de saída. |
 | `--seed <n>` | Seed determinística usada por `rand` e `humanize`. |
 | `--bench` | Imprime tempo de render e fator realtime. |
+| `--mix-report` | Tabela de mix por stem: LUFS integrada (BS.1770), pico, crest, bandas, correlação estéreo + alertas de estridência/mascaramento/stem sumido. |
 
 ## A DSL `.synth`
 
@@ -82,19 +83,61 @@ master {
 | `voice` | Calcula sinal por nota, com `note`, `velocity`, `gate`, `time`, `dur`, `rand`, `voice_idx`. `dur` é a duração agendada da nota em segundos: `env { 0 -> 1 in dur }` faz a rampa ocupar a nota inteira (risers exatos). |
 | `bus` | Processa a soma das vozes. Bom lugar para chorus, delay, reverb, widen e duck. |
 | `mod` | Matriz de modulação para targets internos. |
+| `fx nome(param: default) { ... }` | Plugin de usuário: cadeia de efeitos parametrizada, instanciável em canais do mixer, `bus` e `master`. Expande inline (custo zero em runtime); fx pode compor fx. |
+| `mixer { channel ... }` | Mesa de mixagem: canais com inserts, fader/pan automatizáveis, sends pré/pós-fader e roteamento canal→canal. Ver seção abaixo. |
 | `master` | Processamento final do render. |
 
 ### Recursos
 
 - **Osciladores:** `sine`, `triangle`, `saw`, `square`, `pulse`, `noise`, `nwave`, `wavetable`, `sample`, `grain`.
 - **Modelagem física:** `pluck`, `string` (corda dedilhada EKS/waveguide, 2 polarizações), `bow` (arco com fricção térmica), `flute`, `reed`, `brass`, `voz` (formantes vocais), `modal`, `modal2`, `breath`.
-- **Filtros:** SVF TPT `lowpass`, `highpass`, `bandpass`, `notch`, com clamp de cutoff.
+- **Filtros:** SVF TPT `lowpass`, `highpass`, `bandpass`, `notch`, com clamp de cutoff; EQ paramétrico RBJ `peak`, `lowshelf`, `highshelf`.
 - **Envelopes:** `env {}` multi-segmento e açúcar `adsr()`.
 - **Modulação:** `lfo`, `follower`, `rms`, `ringmod`, matriz `mod`.
 - **Não-lineares:** `saturate`, `clip`, `drive`.
 - **Delay e feedback:** `delay1`, `delay`, `delay_fx`.
 - **Mix e dinâmica:** `gain`, `pan`, `widen`, `haas`, `duck`, `compressor`, `limiter`, `reverb`, `hall`, `chorus`, `leslie`, `convolve` (IR gerada na linguagem, ex.: corpos de instrumento).
 - **Unidades:** `hz`, `khz`, `ms`, `s`, `db`, `%`, `st`, `ct`, `beat`.
+
+### Mixer
+
+O bloco `mixer` transforma a soma de faixas numa mesa de verdade: cada canal
+recebe synths (`in:`), passa por uma cadeia de inserts (qualquer nó de bus ou
+`fx` de usuário), aplica fader e pan suavizados, distribui sends e roteia pra
+`master` ou pra outro canal (grupos). Sidechain entre canais por nome
+(`key:`/`alvo:`). Synth sem canal soma direto no master (retrocompatível).
+
+```txt
+import "presets/mix.synth"   # eq3, presenca, nivela, cola, abre_espaco...
+
+fx meu_ar(quanto: 2db) { highshelf(freq: 9khz, gain: quanto, q: 0.6) }
+
+mixer {
+  channel melodia {
+    in: flauta, violino
+    param corpo: db = 0db          # automatizável via score
+    eq3(mid: corpo, high: 1db)
+    presenca(amount: -2db)         # doma 2-6khz sem perder presença
+    gain -3db
+    pan -0.15
+    send sala: -12db               # pós-fader; `pre` = pré-fader
+  }
+  channel sala {                   # canal sem in: = bus de retorno
+    reverb(mix: 1.0, size: 0.85, damp: 4khz)
+    meu_ar(quanto: 1db)
+    gain -8db
+  }
+}
+```
+
+No score, o contexto `mixer <canal>` automatiza a mesa (`gain` e `send.<canal>`
+em dB, `pan` em -1..1, params de canal em valor cru):
+
+```txt
+mixer melodia
+automate gain 0 -12 -> 8 -3 curve exp
+automate send.sala 0 -30 -> 16 -10
+```
 
 ## A DSL `.score`
 
@@ -127,6 +170,7 @@ arrange manha
 | `humanize` | `humanize 8ms 10%` | Jitter determinístico de tempo e velocity. |
 | `section` | `section intro 32` | Eventos relativos à seção. |
 | `arrange` | `arrange intro verso intro` | Monta a timeline final. |
+| `mixer <canal>` | `mixer melodia` | Seleciona canal do mixer; `set`/`automate` seguintes controlam `gain`, `pan`, `send.<canal>` e params do canal. |
 
 Notas usam nomes como `c4`, `a#3`, `eb2`. Comentário com `#` só conta no início de token, então `a#2` continua válido.
 
@@ -146,6 +190,7 @@ Instrumentos prontos em `presets/`, importáveis com `import "presets/<nome>.syn
 | `physical.synth` | Instrumentos por modelagem física: `violino`, `cello`, `flauta`, `flauta_doce`, `clarinete`, `sino_real`, `marimba_fisica`, metais (`trompete`, `trompa`, `trombone`) e corais. |
 | `strings.synth` | Cordas v2 com `string()` e `bow()` e corpos `modal2` com modos medidos da literatura: `violino`, `viola`, `cello`, `contrabaixo` (arco e pizzicato), `violao`, `violao_aco`, `guitarra`, `baixo_eletrico`, `baixo_slap`, `banjo`, `ukulele`, `bandolim` e seções. Não importar junto com `physical.synth`: os dois definem `corpo_violino` e `secao_violinos`. |
 | `sfx.synth` | SFX de jogo: UI, moeda, sino, pulo, powerup, laser, hit, whoosh, portal, alarme, explosão e armas. Transições que escalam com a duração da nota: `sfx_riser`, `sfx_riser_tonal`, `sfx_riser_noise`, `sfx_shepard`, `sfx_downlifter`, `sfx_sub_drop`, `sfx_impact`. |
+| `mix.synth` | Plugins `fx` de mixagem para canais do mixer: `eq3`, `limpa_lama`, `limpa_grave`, `presenca`, `ar`, `calor`, `cola`, `nivela`, `abre_espaco` (sidechain), `telefone`, `largura`. |
 
 ## Exemplos
 
