@@ -286,7 +286,7 @@ fn check_synth(def: &SynthDef, synth_names: &HashSet<String>, out: &mut Vec<Stri
 
     // W006: physical resonators ring on their own - voices never die without kill after
     if def.kill_after.is_none() {
-        const PHYSICAL: &[&str] = &["pluck", "modal", "modal2", "bow", "flute", "reed"];
+        const PHYSICAL: &[&str] = &["pluck", "string", "modal", "modal2", "bow", "flute", "reed"];
         let mut phys: Option<String> = None;
         for (_, e) in &def.voice {
             walk(e, &mut |x| {

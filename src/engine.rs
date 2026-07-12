@@ -157,6 +157,8 @@ enum NodeState {
     Os { up: [Vec<f64>; 2], dn: [Vec<f64>; 2], w: usize },
     Sample { pos: f64, dir: f64 },
     Pluck { buf: Vec<f64>, w: usize, lp: f64, ap: f64 },
+    // corda dedilhada universal (EKS/waveguide SDL, 2 polarizacoes)
+    Str(Box<StrS>),
     Modal { s1: Vec<f64>, s2: Vec<f64>, exc: f64, rng: u64 },
     Modal2 {
         s1: Vec<f64>,       // 2 resonators per mode (doublet pair)
@@ -171,8 +173,46 @@ enum NodeState {
     // bowed string waveguide: two delay lines (nut side / bridge side) meeting
     // at the bow point in an exact MSW stick-slip junction (Stribeck curve
     // solved per sample with wave feedback). z = last relative velocity
-    // (hysteresis state), nlp = slip-noise lowpass state
-    Bow { nut: Vec<f64>, bridge: Vec<f64>, w: usize, lp: f64, z: f64, nlp: f64, flp: f64, rng: u64 },
+    // (hysteresis state), nlp = slip-noise lowpass state, oz = one-zero do
+    // filtro de reflexao, tq = temperatura de contato do breu (friccao
+    // termica), cfreq/comp = cache da compensacao de fase do loop
+    // pos = posicao do arco sobre a corda em "graos" de textura: a crina
+    // com breu e uma SUPERFICIE fractal que a corda le na velocidade do
+    // arco (o ruido de friccao real nao e branco - e textura escaneada:
+    // arco parado = silencio, lento = rumor grave, rapido = mais denso).
+    // O arco e FINITO (talao/ponta): h = posicao na crina 0..1, dir =
+    // sentido alvo (+1 arcada pra baixo, -1 pra cima), dsm = sentido
+    // suavizado (a mao desacelera, para e volta - vb cruza zero na
+    // inversao). Na virada a textura e relida DE VOLTA (mesma crina).
+    // nlp2 = lowpass da pestana/dedo (terminacao de carne, nao parede
+    // perfeita), ap = allpass de rigidez da corda, iw* = imperfeicao
+    // humana: random walks LENTOS de afinacao da mao esquerda (+-1.5ct)
+    // e do ponto de contato do arco (+-6%) - o timbre respira, nao treme
+    Bow {
+        nut: Vec<f64>,
+        bridge: Vec<f64>,
+        w: usize,
+        lp: f64,
+        z: f64,
+        nlp: f64,
+        nlp2: f64,
+        flp: f64,
+        oz: f64,
+        ap: f64,
+        tq: f64,
+        cfreq: f64,
+        comp: f64,
+        pos: f64,
+        h: f64,
+        dir: f64,
+        dsm: f64,
+        iw_ph: f64,
+        ip_s: f64,
+        ip_t: f64,
+        ic_s: f64,
+        ic_t: f64,
+        rng: u64,
+    },
     // Leslie rotary cabinet: band split + two rotors (horn/drum), each a
     // circularly modulated delay (doppler) + synchronized AM, opposite L/R mics
     Leslie {
@@ -288,6 +328,78 @@ struct FluteS {
 }
 
 #[derive(Clone)]
+// corda dedilhada universal: single delay-loop (Valimaki/Karjalainen CMJ98)
+// x2 polarizacoes. A vertical decai ~2x mais rapido que a horizontal e as
+// duas ficam desafinadas por FRACAO DE HZ (absoluto, nao cents) - e o que
+// da o decay em 2 estagios + batimento lento de corda real. Loop de cada
+// polarizacao: one-pole (perda HF) + one-zero + 2 allpasses de dispersao
+// (rigidez: parciais fn = n*f0*sqrt(1+B*n^2)) + ganho g=10^(-3T/(T60*sr)).
+// Acoplamento h->v one-way (gc pequeno via lowpass) = troca de energia
+// sem risco de instabilidade (CMJ98/STK Guitar). Tension modulation:
+// energia do loop encurta o delay (glide de ataque, twang de banjo).
+struct StrS {
+    v: Vec<f64>,       // polarizacao vertical (decay rapido)
+    h: Vec<f64>,       // polarizacao horizontal (decay lento)
+    w: usize,
+    lp: [f64; 2],      // one-pole do loop, por polarizacao
+    z1: [f64; 2],      // estado do one-zero
+    ap: [[f64; 2]; 2], // allpasses de dispersao [pol][estagio]
+    cpl: f64,          // lowpass do acoplamento h->v
+    en: f64,           // energia recente (tension modulation)
+    cfreq: f64,        // cache: freq da ultima compensacao de fase
+    comp: f64,         // atraso de fase dos filtros do loop, em samples
+}
+
+/// atraso de fase em samples de um one-pole H(z)=k/(1-(1-k)z^-1) em om rad
+fn pd_onepole(k: f64, om: f64) -> f64 {
+    let b = 1.0 - k;
+    (b * om.sin()).atan2(1.0 - b * om.cos()) / om
+}
+
+/// atraso de fase de um one-zero H(z)=(1-c)+c*z^-1
+fn pd_onezero(c: f64, om: f64) -> f64 {
+    (c * om.sin()).atan2((1.0 - c) + c * om.cos()) / om
+}
+
+/// atraso de fase de um allpass de 1a ordem H(z)=(a+z^-1)/(1+a*z^-1)
+fn pd_allpass(a: f64, om: f64) -> f64 {
+    let tn = (-om.sin()).atan2(a + om.cos());
+    let td = (-a * om.sin()).atan2(1.0 + a * om.cos());
+    -(tn - td) / om
+}
+
+/// hash deterministico de um ponto inteiro da malha de textura -> -1..1
+#[inline]
+fn tex_hash(seed: u64, i: i64) -> f64 {
+    let mut x = (i as u64).wrapping_mul(0x9E3779B97F4A7C15) ^ seed;
+    x ^= x >> 33;
+    x = x.wrapping_mul(0xFF51AFD7ED558CCD);
+    x ^= x >> 33;
+    (x as f64 / u64::MAX as f64) * 2.0 - 1.0
+}
+
+/// textura de superficie fractal (3 oitavas de value noise, smoothstep):
+/// o perfil de rugosidade da crina com breu, lido na POSICAO do arco.
+/// Ler devagar = espectro grave; rapido = agudo. E o "raytracing" da
+/// friccao: a superficie existe, o som e a leitura dela.
+fn tex_surface(seed: u64, pos: f64) -> f64 {
+    let mut acc = 0.0;
+    let mut amp = 1.0;
+    let mut p = pos;
+    for o in 0..3u64 {
+        let i = p.floor() as i64;
+        let f = p - p.floor();
+        let s = f * f * (3.0 - 2.0 * f);
+        let os = seed ^ (o << 32);
+        let a = tex_hash(os, i);
+        let b = tex_hash(os, i + 1);
+        acc += (a + (b - a) * s) * amp;
+        amp *= 0.55;
+        p = p * 2.7 + 13.7;
+    }
+    acc * 0.55
+}
+
 struct VozSinger {
     ph: f64,      // glottal phase 0..1
     jit: f64,     // smoothed jitter state (semitones)
@@ -1323,6 +1435,173 @@ fn eval_call(op: Op, args: &[(String, Expr)], id: usize, ctx: &mut Ctx) -> Val {
                 Val::S(0.0)
             }
         }
+        Op::Strings => {
+            // string(): corda dedilhada com fisica real (ver StrS).
+            // exciter: pick | finger | thumb | slap | snap (bartok).
+            // stiff: rigidez (dispersao), pol: split de polarizacao,
+            // tension: glide de ataque/twang, pickup: tap de captador
+            // (comb sin(n*pi*p)), mute: abafamento do dedo (pizz seco).
+            let freq = eval_arg(args, "freq", Val::Hz(220.0), ctx).as_hz().clamp(24.0, 6000.0);
+            let bpm = ctx.bpm;
+            let decay_s = eval_arg(args, "decay", Val::Ms(4000.0), ctx).as_sec(bpm).max(0.05);
+            let bright = eval_arg(args, "bright", Val::S(0.6), ctx).num().clamp(0.0, 1.0);
+            let position = eval_arg(args, "position", Val::S(0.28), ctx).num().clamp(0.02, 0.5);
+            let hard = eval_arg(args, "hard", Val::S(0.5), ctx).num().clamp(0.0, 1.0);
+            let stiff = eval_arg(args, "stiff", Val::S(0.0), ctx).num().clamp(0.0, 1.0);
+            let pol = eval_arg(args, "pol", Val::S(0.4), ctx).num().clamp(0.0, 1.0);
+            let tension = eval_arg(args, "tension", Val::S(0.0), ctx).num().clamp(0.0, 1.0);
+            let pickup = eval_arg(args, "pickup", Val::S(0.0), ctx).num().clamp(0.0, 0.45);
+            let mute = eval_arg(args, "mute", Val::S(0.0), ctx).num().clamp(0.0, 1.0);
+            let g = eval_arg(args, "gain", Val::S(1.0), ctx).num();
+            let exciter: &str = match arg(args, "exciter") {
+                Some(Expr::Ident(s)) => s.as_str(),
+                _ => "finger",
+            };
+            let collide = matches!(exciter, "slap" | "snap");
+            let seed = ctx.seed ^ (id as u64).wrapping_mul(0x9E3779B97F4A7C15) | 1;
+            let st = ctx.state.get_or(id, || {
+                let cap = (ctx.sr / 24.0) as usize + 8;
+                let n = ((ctx.sr / freq) as usize).clamp(4, cap - 2);
+                let mut rng = seed;
+                let mut exc = vec![0.0; n];
+                let peak = (((n as f64) * position) as usize).clamp(1, n - 2);
+                if exciter == "slap" {
+                    // slap (Rank-Kubin): impulso de VELOCIDADE, nao de
+                    // deslocamento - doublet curto no ponto do polegar
+                    let wid = ((0.0015 * ctx.sr) as usize + 2).min(n);
+                    for i in 0..wid {
+                        let ph = i as f64 / wid as f64;
+                        exc[(peak + i) % n] =
+                            (2.0 * std::f64::consts::PI * ph).sin() * (1.0 - ph);
+                    }
+                } else {
+                    // deslocamento triangular: o comb de posicao nasce da
+                    // geometria do triangulo, nao de um filtro
+                    for (i, v) in exc.iter_mut().enumerate() {
+                        *v = if i <= peak {
+                            i as f64 / peak as f64
+                        } else {
+                            (n - i) as f64 / (n - peak) as f64
+                        };
+                    }
+                }
+                // contato dedo/palheta: lowpass no formato (largura do
+                // contato mata os harmonicos altos; hard = mais brilho)
+                let cut = match exciter {
+                    "pick" => 3000.0 + 9000.0 * hard,
+                    "thumb" => 500.0 + 1200.0 * hard,
+                    "snap" => 2500.0 + 7000.0 * hard,
+                    "slap" => 2000.0 + 6000.0 * hard,
+                    _ => 900.0 + 2600.0 * hard,
+                };
+                let kx = onepole_k(cut, ctx.sr);
+                let mut s1 = 0.0;
+                for v in exc.iter_mut() {
+                    s1 += kx * (*v - s1);
+                    *v = s1;
+                }
+                // textura de ruido leve (atrito da liberacao)
+                let namt = 0.04 + 0.10 * hard;
+                let mut s2 = 0.0;
+                for v in exc.iter_mut() {
+                    s2 += kx * (xorshift(&mut rng) - s2);
+                    *v += s2 * namt;
+                }
+                // DC fora (loop com g ~1 carregaria offset) + normaliza;
+                // snap sobra amplitude p/ colidir com o traste
+                let amp = if exciter == "snap" { 1.5 } else { 1.0 };
+                let mean = exc.iter().sum::<f64>() / n as f64;
+                let pk = exc.iter().map(|v| (v - mean).abs()).fold(1e-9, f64::max);
+                for v in exc.iter_mut() {
+                    *v = (*v - mean) / pk * amp;
+                }
+                let mut vb = vec![0.0; cap];
+                let mut hb = vec![0.0; cap];
+                vb[..n].copy_from_slice(&exc);
+                hb[..n].copy_from_slice(&exc);
+                NodeStateBox(NodeState::Str(Box::new(StrS {
+                    v: vb,
+                    h: hb,
+                    w: n, // leitura comeca dentro da regiao pre-carregada
+                    lp: [0.0; 2],
+                    z1: [0.0; 2],
+                    ap: [[0.0; 2]; 2],
+                    cpl: 0.0,
+                    en: 0.0,
+                    cfreq: 0.0,
+                    comp: 0.0,
+                })))
+            });
+            if let NodeStateBox(NodeState::Str(s)) = st {
+                let om = 2.0 * std::f64::consts::PI * freq / ctx.sr;
+                let cutoff = 800.0 * 15f64.powf(bright);
+                let k = onepole_k(cutoff, ctx.sr);
+                let cz = 0.22 * (1.0 - bright);
+                let ad = -0.42 * stiff;
+                if (freq - s.cfreq).abs() > freq * 1e-4 {
+                    s.comp = pd_onepole(k, om)
+                        + pd_onezero(cz, om)
+                        + if ad != 0.0 { 2.0 * pd_allpass(ad, om) } else { 0.0 };
+                    s.cfreq = freq;
+                }
+                // tension modulation: energia recente encurta o loop
+                // (ataque forte nasce ~30ct agudo e assenta - o twang)
+                let sharp = 1.0 - 0.0175 * tension * (s.en * 6.0).min(1.0);
+                let dhz = 0.05 + 0.45 * pol; // detune entre polarizacoes, hz
+                let StrS { v, h, w, lp, z1, ap, cpl, en, comp, .. } = &mut **s;
+                let bufs: [&mut Vec<f64>; 2] = [v, h];
+                let cap = bufs[0].len();
+                let mut outs = [0.0; 2];
+                for p in 0..2 {
+                    let fp = if p == 0 { freq + 0.5 * dhz } else { freq - 0.5 * dhz };
+                    let period = ctx.sr / fp;
+                    let d = (period * sharp - *comp).clamp(2.0, (cap - 4) as f64);
+                    let mut y = ring_read(bufs[p], *w, d);
+                    // colisao com o traste/espelho: reflexao unilateral
+                    // (slap e bartok snap - o "estalo" com buzz curto)
+                    if collide && y < -0.55 {
+                        y = -0.55 + (y + 0.55) * -0.6;
+                    }
+                    // saida no captador: comb 2*sin(pi*n*p) fisico do tap
+                    let tap = if pickup > 0.0 {
+                        y - ring_read(bufs[p], *w, (period * pickup).max(1.0))
+                    } else {
+                        y
+                    };
+                    lp[p] = flush_denorm(lp[p] + k * (y - lp[p]));
+                    let oz = (1.0 - cz) * lp[p] + cz * z1[p];
+                    z1[p] = lp[p];
+                    let mut x = oz;
+                    if ad != 0.0 {
+                        for stg in 0..2 {
+                            let yn = ad * x + ap[p][stg];
+                            ap[p][stg] = x - ad * yn;
+                            x = flush_denorm(yn);
+                        }
+                    }
+                    // T60 por polarizacao; mute = dedo abafando a corda
+                    let t60 = decay_s * if p == 0 { 0.5 } else { 1.0 };
+                    let t60 = t60 / (1.0 + 30.0 * mute);
+                    let gl = 10f64.powf(-3.0 * period / (t60.max(0.03) * ctx.sr));
+                    let mut fb = x * gl;
+                    if p == 0 {
+                        // acoplamento h->v one-way; ganho pequeno porque o
+                        // loop ressonante amplifica ~1/(1-g) (~60x): 0.002
+                        // vira ~-18db de halo sem apagar o decay proprio
+                        fb += 0.002 * *cpl;
+                    }
+                    bufs[p][*w] = flush_denorm(fb);
+                    outs[p] = tap;
+                }
+                *cpl = flush_denorm(*cpl + onepole_k(800.0, ctx.sr) * (outs[1] - *cpl));
+                *w = (*w + 1) % cap;
+                let out = 0.58 * outs[0] + 0.42 * outs[1];
+                *en = flush_denorm(*en + onepole_k(25.0, ctx.sr) * (out * out - *en));
+                Val::S(out * 0.9 * g)
+            } else {
+                Val::S(0.0)
+            }
+        }
         Op::Modal => {
             // bank of 2-pole resonators; presets tuned per body type
             let freq = eval_arg(args, "freq", Val::Hz(220.0), ctx).as_hz().clamp(20.0, 8000.0);
@@ -1527,10 +1806,31 @@ fn eval_call(op: Op, args: &[(String, Expr)], id: usize, ctx: &mut Ctx) -> Val {
             let position = eval_arg(args, "position", Val::S(0.13), ctx).num().clamp(0.02, 0.5);
             let damp = eval_arg(args, "damp", Val::S(0.3), ctx).num().clamp(0.0, 1.0);
             let noise_amt = eval_arg(args, "noise", Val::S(0.15), ctx).num().clamp(0.0, 1.0);
+            // stroke: duracao de uma arcada completa (talao->ponta) na
+            // velocidade nominal; chegando ao fim da crina o arco VOLTA
+            let bpm = ctx.bpm;
+            let stroke_s =
+                eval_arg(args, "stroke", Val::Ms(2200.0), ctx).as_sec(bpm).clamp(0.4, 30.0);
             let g = eval_arg(args, "gain", Val::S(1.0), ctx).num();
             let cap = (ctx.sr / 20.0) as usize + 8;
             let nseed = ctx.seed ^ (id as u64).wrapping_mul(0x9E3779B97F4A7C15) | 1;
             let st = ctx.state.get_or(id, || {
+                // arcada inicial sorteada por voz: metade das notas comeca
+                // pra baixo perto do talao, metade pra cima perto da ponta
+                // (detache real alterna; estantes de secao dessincronizam)
+                let mut r = nseed;
+                let down = xorshift(&mut r) >= 0.0;
+                let frac = xorshift(&mut r) * 0.5 + 0.5; // 0..1
+                let (h0, d0) = if down {
+                    (0.08 + 0.30 * frac, 1.0)
+                } else {
+                    (0.92 - 0.30 * frac, -1.0)
+                };
+                // walks de imperfeicao ja nascem fora do zero (a mao nunca
+                // esta perfeitamente no lugar)
+                let ip0 = xorshift(&mut r) * 0.6;
+                let ic0 = xorshift(&mut r) * 0.6;
+                let ph0 = xorshift(&mut r) * 0.5 + 0.5;
                 NodeStateBox(NodeState::Bow {
                     nut: vec![0.0; cap],
                     bridge: vec![0.0; cap],
@@ -1538,59 +1838,165 @@ fn eval_call(op: Op, args: &[(String, Expr)], id: usize, ctx: &mut Ctx) -> Val {
                     lp: 0.0,
                     z: 0.0,
                     nlp: 0.0,
+                    nlp2: 0.0,
                     flp: 0.0,
-                    rng: nseed,
+                    oz: 0.0,
+                    ap: 0.0,
+                    tq: 0.0,
+                    cfreq: 0.0,
+                    comp: 0.0,
+                    pos: 0.0,
+                    h: h0,
+                    dir: d0,
+                    dsm: d0,
+                    iw_ph: ph0,
+                    ip_s: ip0,
+                    ip_t: ip0,
+                    ic_s: ic0,
+                    ic_t: ic0,
+                    rng: r,
                 })
             });
-            if let NodeStateBox(NodeState::Bow { nut, bridge, w, lp, z, nlp, flp, rng }) = st {
-                // total loop = one period minus filter/interp phase compensation
-                let period = ctx.sr / freq;
-                // -0.8: hermite interp + reflection lowpass + Cremer force
-                // lowpass phase (fitted: erro < 8ct de g2 a a4, deterministico)
-                let d_total = (period - 0.8).max(4.0);
-                let d_bridge = (d_total * position).max(2.0);
+            if let NodeStateBox(NodeState::Bow {
+                nut, bridge, w, lp, z, nlp, nlp2, flp, oz, ap, tq, cfreq, comp, pos, h, dir,
+                dsm, iw_ph, ip_s, ip_t, ic_s, ic_t, rng,
+            }) = st
+            {
+                // imperfeicao humana: nada num instrumento real e uma onda
+                // perfeita. Dois random walks LENTOS (sorteados por voz,
+                // suavizados ~0.8hz): a mao esquerda deriva a afinacao em
+                // +-1.5ct e o ponto de contato do arco anda +-6% - cada
+                // ciclo nasce de condicoes levemente diferentes e o timbre
+                // respira, sem tremer nem soar "efeito".
+                *iw_ph += 1.4 / ctx.sr;
+                if *iw_ph >= 1.0 {
+                    *iw_ph -= 1.0;
+                    *ip_t = xorshift(rng);
+                    *ic_t = xorshift(rng);
+                }
+                let kw = onepole_k(0.8, ctx.sr);
+                *ip_s = flush_denorm(*ip_s + kw * (*ip_t - *ip_s));
+                *ic_s = flush_denorm(*ic_s + kw * (*ic_t - *ic_s));
+                let freq_e = freq * (1.0 + *ip_s * 0.0009); // ~ +-1.5ct
+                let position_e = (position * (1.0 + *ic_s * 0.06)).clamp(0.02, 0.5);
+                let period = ctx.sr / freq_e;
+                // reflexao do cavalete: g0 (perda escalar) + one-pole (perda
+                // HF) + one-zero + allpass de RIGIDEZ (corda real nao e
+                // ideal: parciais levemente esticados, o canto de Helmholtz
+                // arredonda assimetrico). A cadeia aproxima o Q(f) medido
+                // (Cuesta-Valette): one-pole sozinho matava 1-4khz rapido
+                // demais (parte do zumbido).
+                let cutoff = 1800.0 + (1.0 - damp) * 8000.0;
+                let k = onepole_k(cutoff, ctx.sr);
+                let czb = 0.16; // one-zero da reflexao
+                let a_st = -0.055; // rigidez (allpass no lado do cavalete)
+                // pestana/dedo: terminacao de CARNE, nao parede rigida -
+                // reflexao levemente com perda e escura
+                let k_nut = onepole_k(6500.0, ctx.sr);
+                let g0 = 0.975 - 0.025 * damp;
+                // compensacao de fase do loop calculada EXATA (nao fitted)
+                if (freq_e - *cfreq).abs() > freq_e * 1e-4 {
+                    let om = 2.0 * std::f64::consts::PI * freq_e / ctx.sr;
+                    *comp = pd_onepole(k, om)
+                        + pd_onezero(czb, om)
+                        + pd_allpass(a_st, om)
+                        + pd_onepole(k_nut, om);
+                    *cfreq = freq_e;
+                }
+                let d_total = (period - *comp).max(4.0);
+                let d_bridge = (d_total * position_e).max(2.0);
                 let d_nut = (d_total - d_bridge).max(2.0);
                 let bridge_out = ring_read(bridge, *w, d_bridge);
                 let nut_out = ring_read(nut, *w, d_nut);
-                // bridge reflection: lossy + lowpass (string damping)
-                let cutoff = 1800.0 + (1.0 - damp) * 8000.0;
-                let k = onepole_k(cutoff, ctx.sr);
                 *lp = flush_denorm(*lp + k * (bridge_out - *lp));
-                let bridge_refl = -0.95 * *lp;
-                let nut_refl = -nut_out;
-                // relative velocity: bow hair vs string at the contact point
-                let vb = 0.05 + 0.25 * velocity;
+                let ozv = (1.0 - czb) * *lp + czb * *oz;
+                *oz = *lp;
+                // allpass de rigidez
+                let apy = a_st * ozv + *ap;
+                *ap = flush_denorm(ozv - a_st * apy);
+                let bridge_refl = -g0 * apy;
+                *nlp2 = flush_denorm(*nlp2 + k_nut * (nut_out - *nlp2));
+                let nut_refl = -0.997 * *nlp2;
+                // arco FINITO: h avanca pela crina na velocidade do arco;
+                // no talao (0) ou na ponta (1) o sentido alvo inverte e o
+                // sentido efetivo (dsm) cruza zero suavemente - a mao
+                // desacelera, para e volta (~35ms). vb assinado: toda a
+                // fisica abaixo (friccao, Schelleng, textura) reage a
+                // inversao sozinha - dip de amplitude, re-articulacao e a
+                // textura relida de volta.
+                let vmag = 0.05 + 0.25 * velocity;
+                let kd = onepole_k(9.0, ctx.sr);
+                *dsm = flush_denorm(*dsm + kd * (*dir - *dsm));
+                let vb = vmag * *dsm;
+                *h += vb / (0.30 * stroke_s) / ctx.sr;
+                if *h >= 1.0 {
+                    *dir = -1.0;
+                } else if *h <= 0.0 {
+                    *dir = 1.0;
+                }
+                *h = h.clamp(-0.06, 1.06);
                 let dv0 = vb - (bridge_refl + nut_refl);
                 // friction: Stribeck curve resolved EXACTLY per sample in the
                 // McIntyre-Schumacher-Woodhouse manner, WITH the wave feedback
-                // in the solve (injecting F changes the relative velocity by
-                // 1*F in these wave units): dv = dv0 - F(dv).
-                //  stick: F = dv0 holds v = vb exactly - incoming waves
-                //         reflect off the stuck point. Without this exact
-                //         clamp the string can latch parasite locks at
-                //         period +- d_bridge (~1-2 semitones off, at random
-                //         per voice: the "chaotic sour section" bug).
-                //  slip:  bisection on the kinetic branch; the falling-
-                //         friction ambiguity resolves toward the previous
-                //         state (*z), the classic MSW hysteresis rule.
-                let fn_ = 0.10 + 0.55 * pressure; // normal-force scale (wave units)
-                let fs = 1.0 * fn_;               // static (stick) friction level
-                let fc = 0.35 * fn_;              // coulomb (slide) level
-                let vs = 0.06;                    // Stribeck velocity
+                // in the solve, MAIS dois refinamentos fisicos:
+                //  - canal torsional (kappa): a forca do arco tambem torce a
+                //    corda; ondas torsionais sao surdas e MUITO amortecidas,
+                //    entao agem como perda resistiva no ponto de contato:
+                //    dv = dv0 - (1+kappa)*F. Isso suprime a instabilidade de
+                //    Friedlander - o jitter/zumbido agudo do modelo puro.
+                //  - friccao termica (Woodhouse 2003): o breu opera perto da
+                //    transicao vitrea; slip aquece o contato (tq) e derruba a
+                //    friccao, stick esfria e recupera. Da o loop de histerese
+                //    medido no plano f-v (a curva estatica nao passa perto).
+                //  stick: F = dv0/(1+kappa) segura v = vb exato - sem isso a
+                //         corda trava em period +- d_bridge (o bug da "secao
+                //         azeda caotica").
+                //  slip:  bissecao no ramo cinetico; a ambiguidade da curva
+                //         caindo resolve para o estado anterior (*z), regra
+                //         de histerese MSW classica.
+                let kappa = 0.28; // admitancia torsional / transversal
+                let hot = 1.0 / (1.0 + 8.0 * *tq);
+                // Schelleng: a forca maxima MUSICAL cresce com a velocidade
+                // do arco (f_max ~ 2*Z0*vb/(beta*dmu)). Arco parado nao
+                // aguenta pressao nenhuma sem raspar; o cap acopla a forca
+                // efetiva a vb - e a rampa de Guettler embutida: qualquer
+                // envelope de pressure comeca suave enquanto o arco parte.
+                // (O chiado irritante de ataque era pressao de overshoot
+                // com vb ~ 0 = regiao raucous do diagrama de Schelleng.)
+                let vbn = (vb.abs() / 0.30).min(1.0);
+                // alavanca talao/ponta: no talao a mao pesa direto na
+                // corda (mais forca disponivel), na ponta o braco de
+                // alavanca come a forca - cada arcada respira sozinha
+                let lever = 1.05 - 0.25 * h.clamp(0.0, 1.0);
+                // TEXTURA COMO FISICA, nao como ruido: o grao da crina com
+                // breu modula o COEFICIENTE DE FRICCAO local (escala grossa
+                // ~ crina: ~1.1khz na velocidade cheia, sobe e desce com o
+                // arco) e a corda responde - o grit vive DENTRO do tom.
+                // Somar ruido ao sinal era o "chiado merda".
+                *pos += vb * 16000.0 / ctx.sr;
+                let grain = tex_surface(nseed ^ 0xA5A5, *pos * 0.07);
+                let gdepth = 0.10 + 0.30 * noise_amt;
+                let fn_ = (0.10 + 0.55 * pressure)
+                    * (0.22 + 0.78 * vbn)
+                    * lever
+                    * (1.0 + grain * gdepth);
+                let fs = fn_ * (0.60 + 0.40 * hot); // static level (esfria = sobe)
+                let fc = 0.35 * fn_ * (0.75 + 0.25 * hot); // coulomb level
+                let vs = 0.06; // Stribeck velocity
                 let (dv, force);
-                if dv0.abs() <= fs {
-                    force = dv0;
+                if dv0.abs() <= fs * (1.0 + kappa) {
+                    force = dv0 / (1.0 + kappa);
                     dv = 0.0;
                 } else {
                     let sgn = dv0.signum();
-                    let mut a = dv0 - fs * sgn;
-                    let mut b = dv0 - fc * sgn;
+                    let mut a = dv0 - (1.0 + kappa) * fs * sgn;
+                    let mut b = dv0 - (1.0 + kappa) * fc * sgn;
                     if a > b {
                         std::mem::swap(&mut a, &mut b);
                     }
                     let h = |x: f64| -> f64 {
                         let g = fc + (fs - fc) * (-(x / vs) * (x / vs)).exp();
-                        dv0 - g * sgn - x
+                        dv0 - (1.0 + kappa) * g * sgn - x
                     };
                     for _ in 0..8 {
                         let mid = 0.5 * (a + b);
@@ -1609,19 +2015,29 @@ fn eval_call(op: Op, args: &[(String, Expr)], id: usize, ctx: &mut Ctx) -> Val {
                     force = (fc + (fs - fc) * (-(dv / vs) * (dv / vs)).exp()) * sgn;
                 }
                 *z = dv; // last relative velocity (hysteresis state)
+                // calor de contato: slip gera q = |F*dv|, conducao esfria
+                // (~4ms). tq do sample anterior alimenta fs/fc acima.
+                let kq = onepole_k(40.0, ctx.sr);
+                *tq = flush_denorm(*tq + kq * ((force * dv).abs() * 6.0 - *tq));
                 // Cremer corner rounding: bow-hair compliance lowpasses the
                 // friction force; without it the hard stick-slip corner
-                // regenerates a 5-7khz plateau every period (sectional "hiss")
-                let kf = onepole_k(2600.0, ctx.sr);
+                // regenerates a 5-7khz plateau every period (sectional "hiss").
+                // O canto acompanha a forca efetiva: toque leve = canto
+                // redondo/escuro, digging = brilha (fisico: a largura do
+                // corner de Helmholtz encolhe com a forca do arco).
+                let kf = onepole_k(1500.0 + 3200.0 * (fn_ / 0.65).min(1.0), ctx.sr);
                 *flp = flush_denorm(*flp + kf * (force - *flp));
                 let mut excite = *flp;
-                // slip noise: micro-slip events radiate lowpassed impulses,
-                // gated by the actual sliding rate (zero while stuck)
+                // sopro residual de ar do contato: a textura fina do breu
+                // lida na velocidade do arco, BEM baixa (o grosso do grit
+                // agora vive na modulacao de friccao la em cima; isto e
+                // so o ar do contato)
                 if noise_amt > 0.0 {
                     let slip = (dv.abs() / vs).min(2.0);
-                    let kn = onepole_k(4000.0, ctx.sr);
-                    *nlp = flush_denorm(*nlp + kn * (xorshift(rng) - *nlp));
-                    excite += *nlp * slip * noise_amt * 0.35;
+                    let tex = tex_surface(nseed | 1, *pos);
+                    let kn = onepole_k(4200.0, ctx.sr);
+                    *nlp = flush_denorm(*nlp + kn * (tex - *nlp));
+                    excite += *nlp * slip * (0.4 + 1.2 * fn_) * noise_amt * 0.16;
                 }
                 nut[*w] = bridge_refl + excite;
                 bridge[*w] = nut_refl + excite;

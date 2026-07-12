@@ -533,3 +533,64 @@ fn mono_retrigger_has_no_step_click() {
         peak
     );
 }
+
+#[test]
+fn string_speaks_in_tune_with_two_stage_decay() {
+    // string() em a3: f0 dentro de 1% e decay em 2 estagios (polarizacao
+    // vertical morre rapido, horizontal sustenta - assinatura de corda real)
+    let buf = render_patch(
+        "synth s { poly 1 kill after 6s voice { out string(freq: hz(note), decay: 4s, bright: 0.6, position: 0.28, exciter: finger, pol: 0.5) } }",
+        "tempo 120\ntrack a s\n0 a3 6 0.9\n",
+    );
+    let mono: Vec<f64> = buf.iter().map(|s| 0.5 * (s.0 + s.1)).collect();
+    let f0 = f0_autocorr(&mono, 8820, 150.0, 320.0);
+    assert!((f0 - 220.0).abs() < 220.0 * 0.01, "string f0 {:.2}hz, esperado ~220hz", f0);
+    // 2 estagios: taxa de decaimento (db/s) dos primeiros 400ms deve ser
+    // bem maior que a taxa entre 1.5s e 2.5s
+    let rms = |a: f64, b: f64| -> f64 {
+        let (a, b) = ((a * 44100.0) as usize, (b * 44100.0) as usize);
+        (mono[a..b].iter().map(|v| v * v).sum::<f64>() / (b - a) as f64).sqrt().max(1e-12)
+    };
+    let early_rate = 20.0 * (rms(0.35, 0.45) / rms(0.02, 0.12)).log10() / 0.33;
+    let late_rate = 20.0 * (rms(2.4, 2.5) / rms(1.5, 1.6)).log10() / 0.9;
+    assert!(
+        early_rate < late_rate - 2.0,
+        "sem decay em 2 estagios: cedo {:.1}db/s, tarde {:.1}db/s",
+        early_rate, late_rate
+    );
+}
+
+#[test]
+fn string_mute_chokes_ring() {
+    // mute: 1 apos o gate = pizzicato seco; a cauda 300ms depois do
+    // release deve estar >25db abaixo da versao sem mute
+    let patch = |mute: &str| -> String {
+        format!(
+            "synth s {{ poly 1 kill after 4s voice {{ let m = env {{ 0 -> 0 in 1ms sustain 0 release -> 1 in 20ms curve lin }} out string(freq: hz(note), decay: 5s, bright: 0.6, exciter: finger, mute: {}) }} }}",
+            mute
+        )
+    };
+    let ring = render_patch(&patch("0"), "tempo 120\ntrack a s\n0 a3 1 0.9\n");
+    let choked = render_patch(&patch("m"), "tempo 120\ntrack a s\n0 a3 1 0.9\n");
+    // nota dura 0.5s (tempo 120); medir 0.9..1.1s
+    let tail = |buf: &Vec<(f64, f64)>| -> f64 {
+        let m: Vec<f64> = buf.iter().map(|s| 0.5 * (s.0 + s.1)).collect();
+        let (a, b) = ((0.9 * 44100.0) as usize, (1.1 * 44100.0) as usize);
+        (m[a..b].iter().map(|v| v * v).sum::<f64>() / (b - a) as f64).sqrt().max(1e-12)
+    };
+    let (tr, tc) = (tail(&ring), tail(&choked));
+    let drop_db = 20.0 * (tc / tr).log10();
+    assert!(drop_db < -20.0, "mute nao abafou: cauda caiu so {:.1}db", drop_db);
+}
+
+#[test]
+fn string_pickup_and_stiff_stay_in_tune() {
+    // pickup tap + dispersao nao podem desafinar a fundamental (>1%)
+    let buf = render_patch(
+        "synth s { poly 1 kill after 4s voice { out string(freq: hz(note), decay: 4s, bright: 0.8, exciter: pick, stiff: 0.6, pickup: 0.12) } }",
+        "tempo 120\ntrack a s\n0 e2 4 0.9\n",
+    );
+    let mono: Vec<f64> = buf.iter().map(|s| 0.5 * (s.0 + s.1)).collect();
+    let f0 = f0_autocorr(&mono, 8820, 55.0, 120.0);
+    assert!((f0 - 82.41).abs() < 82.41 * 0.01, "string stiff/pickup f0 {:.2}hz, esperado ~82.4hz", f0);
+}
