@@ -1,0 +1,11 @@
+# fixture golden: peca curta exercitando presets reais (cordas fisicas,
+# bateria, baixo) + master chain. Tambem e o exemplo do README.
+import "presets/strings.synth"
+import "presets/drums.synth"
+import "presets/bass.synth"
+
+master {
+  bus_gain -1db
+  compressor(threshold: -18db, ratio: 2, attack: 15ms, release: 180ms)
+  limiter(ceiling: -1db, lookahead: 5ms, release: 60ms)
+}

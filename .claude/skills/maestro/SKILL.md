@@ -57,9 +57,9 @@ import "presets/strings.synth"   # CORDAS SOTA (fisica v2, prefira sobre physica
                                  # (violino/cello/secao_violinos) resolvem pro PRIMEIRO import
 ```
 
-Referências para estudar antes de compor no mesmo clima: `examples/songs/<nome>/`
-(`vila` aconchego/swing, `lamento` melancólico épico, `epic` sinos/orquestral,
-`funky` funk carioca, `infortunata`). SFX prontos em `examples/sfx/`.
+Referências para estudar antes de compor: `tests/fixtures/` (`demo` peça com
+cordas físicas + bateria + baixo, `features` a DSL de score inteira,
+`physics` cada primitivo físico, `showcase` todos os SFX).
 
 Caminhos relativos ao raiz do repo. Definição local com mesmo nome sobrescreve o preset
 (copie o preset pro seu arquivo e edite quando quiser variação). Percussão: toque `c2`/`c3`

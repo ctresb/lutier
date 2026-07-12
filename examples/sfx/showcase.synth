@@ -1,7 +1,0 @@
-# Vitrine de SFX - todos os efeitos de presets/sfx.synth em sequência.
-import "presets/sfx.synth"
-
-master {
-  bus_gain 6db
-  limiter(ceiling: -1db, lookahead: 5ms, release: 60ms)
-}

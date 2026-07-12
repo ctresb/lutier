@@ -32,15 +32,15 @@ Pré-requisitos:
 
 ```sh
 cargo build --release
-./target/release/lutier examples/songs/vila/vila.synth examples/songs/vila/vila.score -o out/vila.wav
+./target/release/lutier tests/fixtures/demo.synth tests/fixtures/demo.score -o out/demo.wav
 ```
 
 Saída esperada:
 
 ```txt
-rendered 59.4s
-wrote out/vila.wav
-wrote out/vila.mp3
+rendered 14.0s
+wrote out/demo.wav
+wrote out/demo.mp3
 ```
 
 Sem `ffmpeg`, o render continua normalmente e só o WAV é gerado.
@@ -149,20 +149,11 @@ Instrumentos prontos em `presets/`, importáveis com `import "presets/<nome>.syn
 
 ## Exemplos
 
-Tudo em `examples/`, separado do código da engine:
-
-| Pasta | Conteúdo |
-|---|---|
-| `examples/songs/<nome>/` | Músicas e peças completas: `vila`, `lamento`, `epic`, `funky`, `infortunata`, `tamborzao`, `alien`, `anos80`, `pomar`, `rickroll`, `hino_supremo`, `megalovania_dwk`, `tomodachi_lobby`, `daynight_cycle`, `trailer_blocks`, `ui_pulse`. Cada pasta tem o par `.synth` + `.score` e o `.mp3` renderizado. |
-| `examples/sfx/` | Showcase com todos os SFX de jogo (`showcase.synth` + `showcase.score` + `showcase.mp3`). |
-| `examples/sfx/oneshots/` | Cada SFX renderizado individualmente em `.mp3`. |
-| `examples/ambience/` | Vitrine dos sons da natureza (`natureza.synth` + `natureza.score` + `natureza.mp3`). |
-
-Os `.mp3` de cada exemplo já estão versionados ao lado dos fontes. Para re-renderizar qualquer um:
+Os scores de referência vivem em `tests/fixtures/` e fazem dupla função: são os goldens de regressão e a documentação viva de escrita. `demo` é uma peça curta com os presets (cordas físicas, bateria, baixo), `features` exercita a DSL de score inteira, `physics` toca cada primitivo de modelagem física e `showcase` percorre os SFX.
 
 ```sh
-./target/release/lutier examples/songs/vila/vila.synth examples/songs/vila/vila.score -o out/vila.wav
-./target/release/lutier examples/sfx/showcase.synth examples/sfx/showcase.score -o out/sfx_showcase.wav
+./target/release/lutier tests/fixtures/demo.synth tests/fixtures/demo.score -o out/demo.wav
+./target/release/lutier tests/fixtures/showcase.synth tests/fixtures/showcase.score -o out/sfx_showcase.wav
 ```
 
 Renders avulsos vão para `out/`, que fica fora do versionamento.
@@ -174,7 +165,7 @@ Renders avulsos vão para `out/`, que fica fora do versionamento.
 Pré-requisitos: Python 3 com `numpy` e `Pillow`, além de `ffmpeg` no PATH.
 
 ```sh
-python3 -m lumiere out/vila.wav examples/songs/vila/vila.score -o out/vila.mp4
+python3 -m lumiere out/demo.wav tests/fixtures/demo.score -o out/demo.mp4
 ```
 
 | Flag | Uso |
@@ -202,10 +193,9 @@ O servidor só serve a UI estática e expõe `POST /render`; todo o áudio conti
 ```txt
 src/          engine (lexer, parser, checker, resolver, engine DSP, score, render, CLI)
 presets/      instrumentos prontos (.synth)
-examples/     músicas, SFX e ambiências (fontes + mp3 renderizado)
 lumiere/      análise visual (wav + score -> mp4)
 daw/          interface web local (editor + render)
-tests/        testes DSP e golden (regressão de áudio)
+tests/        testes DSP e golden (fixtures de score em tests/fixtures/)
 assets/       banner e logo
 out/          áudio renderizado (gitignored)
 ```

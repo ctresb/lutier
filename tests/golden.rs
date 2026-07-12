@@ -33,17 +33,31 @@ fn golden_case(name: &str, synth: &str, score: &str) {
     }
 }
 
+// Fixtures sao scores PROJETADOS para cobertura (nao musicas legadas):
+//  demo     - peca curta com presets reais (cordas fisicas, bateria,
+//             baixo) + master chain; tambem e o exemplo do README
+//  features - a DSL de score inteira (sections/arrange, swing, humanize,
+//             automate, tempo map, acordes, repeticao)
+//  physics  - um synth por primitivo fisico (bow, string, flute, reed,
+//             brass, voz, modal2, nwave+convolve)
+//  showcase - todos os presets de SFX
+
 #[test]
-fn golden_song_vila() {
-    golden_case("vila", "examples/songs/vila/vila.synth", "examples/songs/vila/vila.score");
+fn golden_demo() {
+    golden_case("demo", "tests/fixtures/demo.synth", "tests/fixtures/demo.score");
 }
 
 #[test]
-fn golden_song_funk() {
-    golden_case("funky", "examples/songs/funky/funky.synth", "examples/songs/funky/funky.score");
+fn golden_score_features() {
+    golden_case("features", "tests/fixtures/features.synth", "tests/fixtures/features.score");
+}
+
+#[test]
+fn golden_physics() {
+    golden_case("physics", "tests/fixtures/physics.synth", "tests/fixtures/physics.score");
 }
 
 #[test]
 fn golden_sfx_showcase() {
-    golden_case("sfx_showcase", "examples/sfx/showcase.synth", "examples/sfx/showcase.score");
+    golden_case("sfx_showcase", "tests/fixtures/showcase.synth", "tests/fixtures/showcase.score");
 }

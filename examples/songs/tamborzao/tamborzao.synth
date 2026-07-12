@@ -1,9 +1,0 @@
-# Tamborzao - demo do kit de funk carioca (presets/funk.synth).
-# Groove 3-3-2, bass 808 com glide, stab de ponto e apito de MC.
-import "presets/funk.synth"
-
-master {
-  bus_gain 0db
-  compressor(threshold: -16db, ratio: 3, attack: 8ms, release: 150ms, makeup: auto)
-  limiter(ceiling: -1db, lookahead: 5ms, release: 60ms)
-}
