@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
+    <title>SYNTHDESK</title>
+  </head>
+  <body>
+    <canvas id="desk" aria-label="synthdesk patch canvas"></canvas>
+    <canvas id="glow" aria-hidden="true"></canvas>
+
+    <header id="hud-top" class="hud-bar">
+      <div class="hud-cell hud-left">
+        <span class="hud-key">SUBJECT //</span>
+        <span class="hud-val" id="hud-subject">UNTITLED_DESK</span>
+      </div>
+      <div class="hud-cell hud-center hud-title">SYNTHDESK :: MODULAR TERMINAL</div>
+      <div class="hud-cell hud-right">
+        <span class="hud-val" id="hud-clock">00:00:00</span>
+        <span class="hud-live" id="hud-live"><i class="hud-live-dot"></i>LIVE</span>
+      </div>
+    </header>
+
+    <aside id="componentbox" class="panel" aria-label="components box">
+      <i class="bk bk-tl"></i><i class="bk bk-tr"></i><i class="bk bk-bl"></i><i class="bk bk-br"></i>
+      <div class="panel-head">
+        <span class="panel-title">COMPONENTS BOX</span>
+        <span class="panel-sub" id="componentbox-count">00</span>
+      </div>
+      <div class="panel-rule"></div>
+      <div id="componentbox-list" role="list"></div>
+      <div class="panel-hint">DRAG TO DESK<br />ENTER TO PLACE</div>
+    </aside>
+
+    <aside id="toolbox" class="panel" aria-label="toolbox">
+      <i class="bk bk-tl"></i><i class="bk bk-tr"></i><i class="bk bk-bl"></i><i class="bk bk-br"></i>
+      <div class="panel-head">
+        <span class="panel-title">TOOLBOX</span>
+        <span class="panel-sub" id="toolbox-count">00</span>
+      </div>
+      <div class="panel-rule"></div>
+      <div id="toolbox-list" role="list"></div>
+    </aside>
+
+    <footer id="hud-bot" class="hud-bar">
+      <div class="hud-cell hud-left">
+        <span class="hud-key">STATUS:</span>
+        <span class="hud-val" id="hud-status">IDLE</span>
+      </div>
+      <div class="hud-cell hud-center hud-coords">
+        <span>X <b id="hud-x">+0000.0</b></span>
+        <span>Y <b id="hud-y">+0000.0</b></span>
+        <span>Z <b id="hud-z">100%</b></span>
+      </div>
+      <div class="hud-cell hud-right">
+        <span class="hud-dim" id="hud-snap">SNAP ON</span>
+        <span class="hud-sep">//</span>
+        <span class="hud-dim" id="hud-nodes">NODES 00</span>
+        <span class="hud-sep">//</span>
+        <span class="hud-dim" id="hud-engine">LINK FEED: PROBING</span>
+      </div>
+    </footer>
+
+    <div class="fx-vign" aria-hidden="true"></div>
+    <div class="fx-scan" aria-hidden="true"></div>
+    <div class="fx-grain" aria-hidden="true"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,39 @@
+/* fonte unica do projeto: lilex variavel, local */
+@font-face {
+  font-family: 'Lilex';
+  src: url('../font/lilex-var.ttf') format('truetype-variations');
+  font-weight: 100 700;
+  font-style: normal;
+  font-display: block;
+}
+
+/* identidade lumiere: mono frio sobre preto, fosforo CRT.
+   tint do lumiere: r*0.94 g*0.97 b*1.01, dai a base rgb(214 228 238). */
+:root {
+  /* primitivos */
+  --ph-r: 214;
+  --ph-g: 228;
+  --ph-b: 238;
+  --black: #030405;
+
+  /* semanticos */
+  --bg: var(--black);
+  --line-faint: rgb(var(--ph-r) var(--ph-g) var(--ph-b) / 0.10);
+  --line: rgb(var(--ph-r) var(--ph-g) var(--ph-b) / 0.32);
+  --line-strong: rgb(var(--ph-r) var(--ph-g) var(--ph-b) / 0.55);
+  --bracket: rgb(240 249 255 / 0.92);
+  --text-faint: rgb(var(--ph-r) var(--ph-g) var(--ph-b) / 0.30);
+  --text-dim: rgb(var(--ph-r) var(--ph-g) var(--ph-b) / 0.52);
+  --text: rgb(226 238 246 / 0.80);
+  --text-bright: rgb(244 251 255 / 0.97);
+  --surface: rgb(6 8 10 / 0.86);
+  --focus: rgb(200 235 255 / 0.85);
+  --glow-text: 0 0 7px rgb(180 220 255 / 0.38);
+  --glow-soft: 0 0 12px rgb(160 210 255 / 0.16);
+
+  --font-mono: 'Lilex', monospace;
+
+  /* ritmo */
+  --hud-h: 42px;
+  --pad: 14px;
+}

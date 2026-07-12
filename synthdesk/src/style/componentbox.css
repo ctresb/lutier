@@ -1,0 +1,289 @@
+/* painel lumiere: moldura fina + brackets de canto */
+.panel {
+  position: fixed;
+  z-index: 50;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: var(--pad);
+}
+
+.bk {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+
+.bk::before,
+.bk::after {
+  content: '';
+  position: absolute;
+  background: var(--bracket);
+}
+
+.bk::before { width: 10px; height: 1px; }
+.bk::after { width: 1px; height: 10px; }
+
+.bk-tl { top: -1px; left: -1px; }
+.bk-tr { top: -1px; right: -1px; }
+.bk-bl { bottom: -1px; left: -1px; }
+.bk-br { bottom: -1px; right: -1px; }
+.bk-tl::before, .bk-tl::after { top: 0; left: 0; }
+.bk-tr::before, .bk-tr::after { top: 0; right: 0; }
+.bk-bl::before, .bk-bl::after { bottom: 0; left: 0; }
+.bk-br::before, .bk-br::after { bottom: 0; right: 0; }
+
+#componentbox {
+  top: calc(var(--hud-h) + 22px);
+  left: 22px;
+  width: 268px;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.panel-title {
+  color: var(--text-bright);
+  letter-spacing: 0.16em;
+  font-size: 12px;
+  text-shadow: var(--glow-text);
+}
+
+.panel-sub {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-rule {
+  height: 1px;
+  background: var(--line);
+  margin: 10px 0 6px;
+}
+
+.panel-hint {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-faint);
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  line-height: 1.7;
+}
+
+/* header de categoria entre os grupos do components box */
+.comp-cat {
+  margin: 10px 8px 2px;
+  color: var(--text-faint);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+}
+
+.comp-cat:first-child {
+  margin-top: 4px;
+}
+
+/* item de modulo */
+.comp-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 8px;
+  margin: 2px 0;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  letter-spacing: 0.1em;
+  text-align: left;
+  cursor: grab;
+}
+
+.comp-item:hover {
+  border-color: var(--line);
+  color: var(--text-bright);
+}
+
+.comp-item:active,
+.comp-item.dragging {
+  cursor: grabbing;
+  border-color: var(--line-strong);
+}
+
+.comp-idx { color: var(--text-faint); font-size: 10px; }
+
+.comp-name {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comp-tag {
+  color: var(--text-dim);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  border: 1px solid var(--line-faint);
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+
+/* fantasma seguindo o cursor durante drag do module box */
+#comp-ghost {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  border: 1px solid var(--line-strong);
+  color: var(--text-bright);
+  background: var(--surface);
+  padding: 6px 10px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-shadow: var(--glow-text);
+  transform: translate(-50%, -50%);
+}
+
+/* menu de contexto: mesmo painel lumiere, icones feitos a mao */
+.ctx-menu {
+  min-width: 190px;
+  padding: 6px;
+  z-index: 70;
+}
+
+.ctx-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ctx-item:hover:not(:disabled) {
+  border-color: var(--line);
+  color: var(--text-bright);
+}
+
+.ctx-item:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+/* componente icon: svgs feitos a mao em src/icons, currentColor */
+.icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.icon,
+.icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* toolbox: mesma anatomia do components box, canto superior direito */
+#toolbox {
+  top: calc(var(--hud-h) + 22px);
+  right: 22px;
+  width: 210px;
+}
+
+.tool-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 24px 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 9px 8px;
+  margin: 2px 0;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  letter-spacing: 0.1em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tool-item:hover {
+  border-color: var(--line);
+  color: var(--text-bright);
+}
+
+.tool-item:active {
+  border-color: var(--line-strong);
+}
+
+.tool-name {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* modal de confirmacao */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.55);
+}
+
+.modal {
+  position: relative;
+  min-width: 300px;
+}
+
+.modal-msg {
+  margin: 12px 0 16px;
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  line-height: 1.6;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.modal-btn:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.modal-btn-primary {
+  color: var(--text-bright);
+  border-color: var(--line-strong);
+}
+
+.modal-btn-primary:hover {
+  color: var(--text-bright);
+  border-color: var(--bracket);
+}

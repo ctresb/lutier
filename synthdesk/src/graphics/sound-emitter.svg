@@ -1,0 +1,20 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- grelha do speaker: aro claro ph(110) + aro escuro ph(48), mesmos
+     tons do outline do potenciometro; furos em ph(160), sem cantos -->
+<circle cx="32" cy="32" r="26" stroke="#676B75"/>
+<circle cx="32" cy="32" r="21" stroke="#2D2F36"/>
+<g fill="#969BA8">
+<rect x="27.3" y="19.3" width="1.4" height="1.4"/>
+<rect x="35.3" y="19.3" width="1.4" height="1.4"/>
+<rect x="19.3" y="27.3" width="1.4" height="1.4"/>
+<rect x="27.3" y="27.3" width="1.4" height="1.4"/>
+<rect x="35.3" y="27.3" width="1.4" height="1.4"/>
+<rect x="43.3" y="27.3" width="1.4" height="1.4"/>
+<rect x="19.3" y="35.3" width="1.4" height="1.4"/>
+<rect x="27.3" y="35.3" width="1.4" height="1.4"/>
+<rect x="35.3" y="35.3" width="1.4" height="1.4"/>
+<rect x="43.3" y="35.3" width="1.4" height="1.4"/>
+<rect x="27.3" y="43.3" width="1.4" height="1.4"/>
+<rect x="35.3" y="43.3" width="1.4" height="1.4"/>
+</g>
+</svg>
