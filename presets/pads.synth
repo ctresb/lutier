@@ -2,29 +2,110 @@
 # uso: import "presets/pads.synth" e referencie o nome na track.
 
 # Cordas sinfônicas quentes. Melancolia, épico, cinemática.
-# param cutoff automatizável (500 escuro -> 4500 aberto).
+# v2 FISICA: 4 estantes de arco (bow) + 1 cello por voz, vibratos e
+# afinacoes independentes por estante (nada oscila junto - era o unison
+# de saw sincronizado que dava o "enxame de abelha"), corpo de violino
+# real por convolucao. param cutoff automatizável (500 escuro -> 4500 aberto).
 synth strings_warm {
-  poly 12 steal oldest spread 70%
-  gain -10db
+  poly 10 steal oldest spread 70%
+  gain -9db
+  # teto de seguranca: notas de pad podem ser bem longas; a voz morre
+  # antes disso por deteccao de silencio apos o release
+  kill after 30s
 
-  param cutoff: hz = 900 range 100..8000 smooth 20ms curve log
+  param cutoff: hz = 2600 range 100..8000 smooth 20ms curve log
+  # vibrato opcional da secao: 0 = senza (pad reto), 1 = normal
+  param vibrato: scalar = 1 range 0..2 smooth 60ms
 
   global {
-    let breath = lfo(shape: sine, rate: 16beat, amount: 0.12)
+    let breath = lfo(shape: sine, rate: 16beat, amount: 0.1)
   }
 
   voice {
-    let osc = saw(freq: note, unison: 7, spread: 14ct, width: 0.8, gain: 0.4)
-            + saw(freq: note - 12st, unison: 3, spread: 8ct, width: 0.4, gain: 0.18)
-    let amp = adsr(attack: 1.8s, decay: 600ms, sustain: 0.85, release: 3.5s)
-    let tone = lowpass(osc, cutoff: cutoff, q: 0.25, slope: 24db)
-    out tone * amp * velocity * (1 + breath)
+    # arcada de pad: entra devagar, respira, solta longo
+    let a1 = env { 0 -> 0.72 in 420ms curve exp sustain 0.72 release -> 0 in 900ms curve exp }
+    let a2 = env { 0 -> 0.66 in 560ms curve exp sustain 0.66 release -> 0 in 1100ms curve exp }
+    let a3 = env { 0 -> 0.7 in 350ms curve exp sustain 0.7 release -> 0 in 1000ms curve exp }
+    let a4 = env { 0 -> 0.64 in 640ms curve exp sustain 0.64 release -> 0 in 1200ms curve exp }
+    let vibd = env { 0 -> 0 in 500ms curve lin -> 1 in 900ms curve log }
+    let v1 = lfo(shape: sine, rate: 5.2hz, phase: 0.17) * vibd * vibrato * 0.1st
+    let v2 = lfo(shape: sine, rate: 5.8hz, phase: 0.62) * vibd * vibrato * 0.12st
+    let v3 = lfo(shape: sine, rate: 4.7hz, phase: 0.34) * vibd * vibrato * 0.09st
+    let v4 = lfo(shape: sine, rate: 6.0hz, phase: 0.81) * vibd * vibrato * 0.11st
+    # random walk de afinacao por estante (a secao "vive")
+    let w1 = lfo(shape: sample_hold, rate: 0.6hz, amount: 1) * 2ct
+    let w2 = lfo(shape: sample_hold, rate: 0.8hz, amount: 1) * 2ct
+    let w3 = lfo(shape: sample_hold, rate: 0.7hz, amount: 1) * 2ct
+    let w4 = lfo(shape: sample_hold, rate: 0.9hz, amount: 1) * 2ct
+    let p = 0.36 + velocity * 0.2
+    let c1 = bow(freq: hz(note + 6ct + v1 + w1), pressure: p, velocity: a1, position: 0.13, damp: 0.3, noise: 0.07)
+    let c2 = bow(freq: hz(note - 5ct + v2 + w2), pressure: p * 0.95, velocity: a2, position: 0.14, damp: 0.33, noise: 0.07)
+    let c3 = bow(freq: hz(note + 2ct + v3 + w3), pressure: p * 1.03, velocity: a3, position: 0.12, damp: 0.28, noise: 0.07)
+    let c4 = bow(freq: hz(note - 8ct + v4 + w4), pressure: p * 0.92, velocity: a4, position: 0.15, damp: 0.35, noise: 0.07)
+    # camada grave (cello da secao): uma oitava abaixo, mais escura
+    let c5 = bow(freq: hz(note - 12st + 3ct + v3 * 0.7), pressure: p * 0.9, velocity: a2 * 0.9,
+                 position: 0.1, damp: 0.42, noise: 0.05)
+    let secao = pan(c1, -0.7) + pan(c2, 0.6) + pan(c3, -0.3) + pan(c4, 0.45) + pan(c5, 0.05) * 0.55
+    let tone = lowpass(secao, cutoff: cutoff, q: 0.25, slope: 12db)
+    out tone * 0.3 * (0.6 + velocity * 0.4) * (1 + breath)
   }
 
   bus {
-    chorus(voices: 4, depth: 35%, rate: 0.3hz, mix: 30%)
-    widen(amount: 45%)
-    reverb(size: 0.95, decay: 5s, damp: 3.5khz, predelay: 30ms, mix: 32%)
+    convolve(ir: corpo_violino_w, ir2: corpo_violino_wr, dur: 120ms, mix: 42%)
+    widen(amount: 40%)
+    reverb(size: 0.95, decay: 5s, damp: 3.5khz, predelay: 30ms, mix: 28%)
+  }
+}
+
+# Corpos p/ o strings_warm (copia dos modos medidos de physical.synth com
+# nome proprio: pads.synth nao importa nada e nomes nao podem colidir).
+synth corpo_violino_w {
+  poly 1
+  kill after 1s
+
+  voice {
+    let modos = [
+      (1.0,   0.085s, 1.0),
+      (1.473, 0.06s,  0.35),
+      (1.673, 0.065s, 0.85),
+      (2.0,   0.062s, 0.9),
+      (2.545, 0.045s, 0.5),
+      (3.055, 0.04s,  0.45),
+      (3.636, 0.035s, 0.4),
+      (4.364, 0.03s,  0.35),
+      (5.273, 0.025s, 0.3),
+      (6.364, 0.022s, 0.3),
+      (7.636, 0.018s, 0.25),
+      (8.364, 0.009s, 0.28),
+      (9.273, 0.008s, 0.3),
+      (10.18, 0.008s, 0.26)
+    ]
+    out modal2(freq: 275hz, modes: modos, doublet: 0.15%, strike: 0.35, hard: 0.85)
+  }
+}
+
+synth corpo_violino_wr {
+  poly 1
+  kill after 1s
+
+  voice {
+    let modos = [
+      (1.012,  0.08s,  1.0),
+      (1.492,  0.058s, 0.38),
+      (1.655,  0.067s, 0.82),
+      (2.024,  0.06s,  0.92),
+      (2.578,  0.044s, 0.48),
+      (3.02,   0.041s, 0.47),
+      (3.684,  0.034s, 0.38),
+      (4.31,   0.03s,  0.36),
+      (5.34,   0.024s, 0.29),
+      (6.44,   0.021s, 0.31),
+      (7.55,   0.017s, 0.24),
+      (8.47,   0.009s, 0.27),
+      (9.16,   0.008s, 0.29),
+      (10.31,  0.008s, 0.25)
+    ]
+    out modal2(freq: 275hz, modes: modos, doublet: 0.18%, strike: 0.42, hard: 0.85)
   }
 }
 

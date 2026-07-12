@@ -4,9 +4,9 @@
 
 # lutier
 
-`lutier` é uma engine musical offline escrita em Rust, sem dependências externas. Você descreve instrumentos numa DSL própria (`.synth`), escreve a partitura em outra (`.score`) e a engine renderiza áudio determinístico em WAV (e MP3, se `ffmpeg` estiver no PATH).
+`lutier` é uma engine sonora offline escrita em Rust, sem dependências externas. Você constrói qualquer som numa DSL própria (`.synth`): instrumentos por modelagem física, sintetizadores, efeitos, ambiências e SFX. Uma segunda DSL (`.score`) agenda os eventos no tempo, e a engine renderiza áudio determinístico em WAV (e MP3, se `ffmpeg` estiver no PATH).
 
-A ideia central: música, trilha e SFX como código. Instrumentos versionáveis, partitura legível, render reprodutível bit a bit. Nenhum áudio pré-gravado: todo som nasce da linguagem.
+A ideia central: som como código. Não é só música: é um lutier digital. Você descreve a física de uma corda friccionada, o jato de ar de uma flauta ou o corpo de um violino, versiona tudo em texto e o render sai reprodutível bit a bit. Nenhum áudio pré-gravado: todo som nasce da linguagem.
 
 ## Índice
 
@@ -16,6 +16,8 @@ A ideia central: música, trilha e SFX como código. Instrumentos versionáveis,
 - [A DSL `.score`](#a-dsl-score)
 - [Presets](#presets)
 - [Exemplos](#exemplos)
+- [Lumiere: análise visual](#lumiere-análise-visual)
+- [DAW web local](#daw-web-local)
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Testes](#testes)
 - [Composição com agentes](#composição-com-agentes)
@@ -84,13 +86,14 @@ master {
 
 ### Recursos
 
-- **Osciladores:** `sine`, `triangle`, `saw`, `square`, `pulse`, `noise`, `wavetable`, `pluck`, `modal`, `sample`, `grain`.
+- **Osciladores:** `sine`, `triangle`, `saw`, `square`, `pulse`, `noise`, `nwave`, `wavetable`, `sample`, `grain`.
+- **Modelagem física:** `pluck`, `string` (corda dedilhada EKS/waveguide, 2 polarizações), `bow` (arco com fricção térmica), `flute`, `reed`, `brass`, `voz` (formantes vocais), `modal`, `modal2`, `breath`.
 - **Filtros:** SVF TPT `lowpass`, `highpass`, `bandpass`, `notch`, com clamp de cutoff.
 - **Envelopes:** `env {}` multi-segmento e açúcar `adsr()`.
 - **Modulação:** `lfo`, `follower`, `rms`, `ringmod`, matriz `mod`.
 - **Não-lineares:** `saturate`, `clip`, `drive`.
 - **Delay e feedback:** `delay1`, `delay`, `delay_fx`.
-- **Mix e dinâmica:** `gain`, `pan`, `widen`, `duck`, `compressor`, `limiter`, `reverb`, `chorus`.
+- **Mix e dinâmica:** `gain`, `pan`, `widen`, `haas`, `duck`, `compressor`, `limiter`, `reverb`, `hall`, `chorus`, `leslie`, `convolve` (IR gerada na linguagem, ex.: corpos de instrumento).
 - **Unidades:** `hz`, `khz`, `ms`, `s`, `db`, `%`, `st`, `ct`, `beat`.
 
 ## A DSL `.score`
@@ -140,7 +143,8 @@ Instrumentos prontos em `presets/`, importáveis com `import "presets/<nome>.syn
 | `drums.synth` | `taiko`, `kick_deep`, `snare`, `hat_closed`, `hat_open`, `shaker`, `tom_modal`. |
 | `funk.synth` | Funk carioca/trap: `kick_808`, `bass_808` (glide), `kick_tamborzao`, `tamborim`, `atabaque`, `clap_funk`, `snare_seca`, `hat_trap`, `stab_funk`, `apito`. |
 | `nature.synth` | Ambiências procedurais: `vento`, `chuva`, `oceano`, `riacho`, `trovao`, `fogueira`, `grilos`, `sapos`, `passaros`. |
-| `physical.synth` | Instrumentos por modelagem física: `violino`, `cello`, `flauta`, `flauta_doce`, `clarinete`, `sino_real`, `marimba_fisica`, metais e corais. |
+| `physical.synth` | Instrumentos por modelagem física: `violino`, `cello`, `flauta`, `flauta_doce`, `clarinete`, `sino_real`, `marimba_fisica`, metais (`trompete`, `trompa`, `trombone`) e corais. |
+| `strings.synth` | Cordas v2 com `string()` e `bow()` e corpos `modal2` com modos medidos da literatura: `violino`, `viola`, `cello`, `contrabaixo` (arco e pizzicato), `violao`, `violao_aco`, `guitarra`, `baixo_eletrico`, `baixo_slap`, `banjo`, `ukulele`, `bandolim` e seções. Não importar junto com `physical.synth`: os dois definem `corpo_violino` e `secao_violinos`. |
 | `sfx.synth` | SFX de jogo: UI, moeda, sino, pulo, powerup, laser, hit, whoosh, portal, alarme, explosão e armas. Transições que escalam com a duração da nota: `sfx_riser`, `sfx_riser_tonal`, `sfx_riser_noise`, `sfx_shepard`, `sfx_downlifter`, `sfx_sub_drop`, `sfx_impact`. |
 
 ## Exemplos
@@ -149,7 +153,7 @@ Tudo em `examples/`, separado do código da engine:
 
 | Pasta | Conteúdo |
 |---|---|
-| `examples/songs/<nome>/` | Músicas completas: `vila`, `lamento`, `epic`, `funky`, `infortunata`, `tamborzao`. Cada pasta tem o par `.synth` + `.score` e o `.mp3` renderizado. |
+| `examples/songs/<nome>/` | Músicas e peças completas: `vila`, `lamento`, `epic`, `funky`, `infortunata`, `tamborzao`, `alien`, `anos80`, `pomar`, `rickroll`, `hino_supremo`, `megalovania_dwk`, `tomodachi_lobby`, `daynight_cycle`, `trailer_blocks`, `ui_pulse`. Cada pasta tem o par `.synth` + `.score` e o `.mp3` renderizado. |
 | `examples/sfx/` | Showcase com todos os SFX de jogo (`showcase.synth` + `showcase.score` + `showcase.mp3`). |
 | `examples/sfx/oneshots/` | Cada SFX renderizado individualmente em `.mp3`. |
 | `examples/ambience/` | Vitrine dos sons da natureza (`natureza.synth` + `natureza.score` + `natureza.mp3`). |
@@ -163,12 +167,44 @@ Os `.mp3` de cada exemplo já estão versionados ao lado dos fontes. Para re-ren
 
 Renders avulsos vão para `out/`, que fica fora do versionamento.
 
+## Lumiere: análise visual
+
+`lumiere/` é um terminal de análise visual em Python: recebe o WAV renderizado e o `.score` correspondente e gera um MP4 1080p24 com HUD monocromático estilo terminal, mostrando espectro, camadas do score, seções e medidores enquanto o áudio toca.
+
+Pré-requisitos: Python 3 com `numpy` e `Pillow`, além de `ffmpeg` no PATH.
+
+```sh
+python3 -m lumiere out/vila.wav examples/songs/vila/vila.score -o out/vila.mp4
+```
+
+| Flag | Uso |
+|---|---|
+| `-o <arquivo.mp4>` | Caminho do vídeo de saída. |
+| `--fps <n>` | Frames por segundo (padrão 24). |
+| `--title <texto>` | Título exibido no HUD (padrão: nome do score). |
+| `--theme mono\|brasil` | Tema de cor. |
+| `--preview "10,50,90"` | Salva PNGs nesses segundos e sai, sem renderizar o vídeo. |
+| `--seed <n>` / `--crf <n>` | Seed das partículas e qualidade do encode. |
+
+## DAW web local
+
+`daw/` é uma interface web local para editar e ouvir patches sem sair do navegador: editor de `.synth` e `.score` com piano roll, tempo, grade e botão de render que chama o binário `lutier` e devolve o WAV.
+
+```sh
+cargo build --release
+python3 daw/server.py        # abre em http://localhost:8737
+```
+
+O servidor só serve a UI estática e expõe `POST /render`; todo o áudio continua sendo gerado pela engine Rust.
+
 ## Estrutura do repositório
 
 ```txt
-src/          engine (lexer, parser, checker, engine DSP, score, render, CLI)
+src/          engine (lexer, parser, checker, resolver, engine DSP, score, render, CLI)
 presets/      instrumentos prontos (.synth)
-examples/     músicas e SFX (fontes + mp3 renderizado)
+examples/     músicas, SFX e ambiências (fontes + mp3 renderizado)
+lumiere/      análise visual (wav + score -> mp4)
+daw/          interface web local (editor + render)
 tests/        testes DSP e golden (regressão de áudio)
 assets/       banner e logo
 out/          áudio renderizado (gitignored)
@@ -179,9 +215,11 @@ out/          áudio renderizado (gitignored)
 | `src/lexer.rs` | Tokens da DSL `.synth`. |
 | `src/parser.rs` | AST, imports, expressões, synths, buses, master e mod matrix. |
 | `src/check.rs` | Passes semânticos com diagnósticos `E*` e `W*`. |
-| `src/engine.rs` | Interpretador de dataflow, estado por nó/voz, DSP, osciladores e efeitos. |
+| `src/resolve.rs` | Resolução de nomes em load-time para slots indexados (engine não hasheia strings por sample). |
+| `src/engine.rs` | Interpretador de dataflow, estado por nó/voz, DSP, osciladores, modelagem física e efeitos. |
 | `src/score.rs` | Parser `.score`, tempo map, sections, arrange, chords, swing, humanize e automação. |
 | `src/render.rs` | Render offline, roteamento, sidechain e master chain. |
+| `src/fp.rs` | Fingerprint de áudio (hash + RMS por bloco) para os testes golden. |
 | `src/wavio.rs` | Escrita WAV. |
 | `src/main.rs` | CLI `lutier`. |
 

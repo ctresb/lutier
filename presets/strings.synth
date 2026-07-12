@@ -1,0 +1,727 @@
+# lutier presets - cordas por modelagem fisica (overhaul SOTA)
+# Motor: string() = corda dedilhada EKS/waveguide com 2 polarizacoes,
+# dispersao, tension modulation, colisao de traste e tap de captador;
+# bow() v2 = waveguide de arco com friccao termica (Woodhouse 2003),
+# canal torsional e reflexao com perda dependente de frequencia.
+# Corpos: modal2 com MODOS MEDIDOS da literatura (Bissinger, Gough,
+# Woodhouse, Rossing, Politzer) convolvidos por IR gerada - zero samples.
+
+# ---------------------------------------------------------------- corpos
+
+# Corpo de violino com MODOS MEDIDOS da literatura (Woodhouse/Bissinger,
+# violino "Titian"): A0 275hz, CBR 405, B1- 460, B1+ 550, cluster de tampo
+# 700-2100 e o "bridge hill" largo em 2.3-2.8khz (o brilho de verniz).
+# Razoes relativas a 275hz; decay = 2.2*Q/f. Usado SOMENTE como IR do convolve.
+synth corpo_violino {
+  poly 1
+  kill after 1s
+
+  voice {
+    let modos = [
+      (1.0,   0.085s, 1.0),
+      (1.473, 0.06s,  0.35),
+      (1.673, 0.065s, 0.85),
+      (2.0,   0.062s, 0.9),
+      (2.545, 0.045s, 0.5),
+      (3.055, 0.04s,  0.45),
+      (3.636, 0.035s, 0.4),
+      (4.364, 0.03s,  0.35),
+      (5.273, 0.025s, 0.3),
+      (6.364, 0.022s, 0.3),
+      (7.636, 0.018s, 0.25),
+      (8.364, 0.009s, 0.28),
+      (9.273, 0.008s, 0.3),
+      (10.18, 0.008s, 0.26)
+    ]
+    out modal2(freq: 275hz, modes: modos, doublet: 0.15%, strike: 0.35, hard: 0.85)
+  }
+}
+
+# Corpo de violino - variante direita: mesmos modos com desvios pequenos
+# (nenhum corpo e simetrico). convolve(ir:, ir2:) usa um por canal =
+# decorrelacao L/R real, sem truques de fase.
+synth corpo_violino_r {
+  poly 1
+  kill after 1s
+
+  voice {
+    let modos = [
+      (1.012,  0.08s,  1.0),
+      (1.492,  0.058s, 0.38),
+      (1.655,  0.067s, 0.82),
+      (2.024,  0.06s,  0.92),
+      (2.578,  0.044s, 0.48),
+      (3.02,   0.041s, 0.47),
+      (3.684,  0.034s, 0.38),
+      (4.31,   0.03s,  0.36),
+      (5.34,   0.024s, 0.29),
+      (6.44,   0.021s, 0.31),
+      (7.55,   0.017s, 0.24),
+      (8.47,   0.009s, 0.27),
+      (9.16,   0.008s, 0.29),
+      (10.31,  0.008s, 0.25)
+    ]
+    out modal2(freq: 275hz, modes: modos, doublet: 0.18%, strike: 0.42, hard: 0.85)
+  }
+}
+
+
+# Corpo de viola: A0 ~225hz, cluster B1 350-440, hill ~2khz. Mais escuro
+# e nasal que violino (corpo "pequeno demais" para a afinacao - e isso
+# que faz viola soar viola). Razoes relativas a 225hz.
+synth corpo_viola {
+  poly 1
+  kill after 1s
+
+  voice {
+    let modos = [
+      (1.0,   0.11s,  1.0),
+      (1.533, 0.07s,  0.5),
+      (1.564, 0.075s, 0.85),
+      (1.956, 0.07s,  0.9),
+      (2.756, 0.05s,  0.5),
+      (3.911, 0.042s, 0.45),
+      (5.333, 0.035s, 0.4),
+      (7.556, 0.028s, 0.38),
+      (8.889, 0.014s, 0.5),
+      (10.67, 0.012s, 0.42),
+      (13.78, 0.01s,  0.3),
+      (18.67, 0.008s, 0.22)
+    ]
+    out modal2(freq: 225hz, modes: modos, doublet: 0.16%, strike: 0.38, hard: 0.85)
+  }
+}
+
+# Corpo de cello (dados medidos): A0 ~105, corpo/B1 147-196 (regiao do
+# wolf), B1+ ~530, DOIS hills ~1khz e ~2.2khz. Decays maiores que violino.
+synth corpo_cello {
+  poly 1
+  kill after 1.2s
+
+  voice {
+    let modos = [
+      (1.0,   0.16s,  1.0),
+      (1.4,   0.12s,  0.7),
+      (1.667, 0.13s,  0.9),
+      (1.857, 0.11s,  0.85),
+      (2.476, 0.08s,  0.5),
+      (3.714, 0.06s,  0.45),
+      (5.048, 0.06s,  0.55),
+      (6.667, 0.045s, 0.4),
+      (9.524, 0.02s,  0.55),
+      (13.33, 0.015s, 0.4),
+      (20.95, 0.012s, 0.5),
+      (29.52, 0.009s, 0.3)
+    ]
+    out modal2(freq: 105hz, modes: modos, doublet: 0.15%, strike: 0.4, hard: 0.75)
+  }
+}
+
+# Corpo de contrabaixo: ar ~62hz, corpo 90-117, hill ~800hz. A radiacao
+# real colapsa abaixo de 60hz - o grave que se ouve sao os harmonicos.
+synth corpo_contrabaixo {
+  poly 1
+  kill after 1.2s
+
+  voice {
+    let modos = [
+      (1.0,   0.18s,  1.0),
+      (1.452, 0.14s,  0.8),
+      (1.774, 0.14s,  0.85),
+      (2.339, 0.1s,   0.5),
+      (3.226, 0.08s,  0.45),
+      (4.677, 0.06s,  0.4),
+      (6.774, 0.05s,  0.35),
+      (9.677, 0.035s, 0.4),
+      (12.9,  0.025s, 0.45),
+      (17.74, 0.018s, 0.3),
+      (25.81, 0.012s, 0.2)
+    ]
+    out modal2(freq: 62hz, modes: modos, doublet: 0.12%, strike: 0.42, hard: 0.7)
+  }
+}
+
+# Corpo de violao (Rossing/Christensen-Vistisen/Woodhouse): A0 ~100hz
+# Q~29, T1 ~200hz, tampo 286/377/436, cluster estatistico ate ~3.6khz.
+synth corpo_violao {
+  poly 1
+  kill after 1s
+
+  voice {
+    let modos = [
+      (1.0,   0.2s,   1.0),
+      (2.0,   0.12s,  0.9),
+      (2.86,  0.07s,  0.5),
+      (3.77,  0.06s,  0.45),
+      (4.36,  0.065s, 0.55),
+      (5.5,   0.05s,  0.4),
+      (7.0,   0.04s,  0.35),
+      (8.73,  0.035s, 0.35),
+      (9.8,   0.03s,  0.3),
+      (11.74, 0.026s, 0.28),
+      (15.0,  0.02s,  0.25),
+      (20.0,  0.016s, 0.22),
+      (28.0,  0.012s, 0.18),
+      (36.0,  0.009s, 0.12)
+    ]
+    out modal2(freq: 100hz, modes: modos, doublet: 0.14%, strike: 0.35, hard: 0.8)
+  }
+}
+
+# Variante direita do violao (nenhum tampo e simetrico): desvios pequenos
+# p/ decorrelacao L/R real via convolve(ir:, ir2:).
+synth corpo_violao_r {
+  poly 1
+  kill after 1s
+
+  voice {
+    let modos = [
+      (1.01,  0.19s,  1.0),
+      (1.985, 0.125s, 0.88),
+      (2.9,   0.068s, 0.52),
+      (3.73,  0.062s, 0.43),
+      (4.41,  0.063s, 0.57),
+      (5.44,  0.052s, 0.38),
+      (7.09,  0.038s, 0.36),
+      (8.62,  0.036s, 0.33),
+      (9.92,  0.029s, 0.31),
+      (11.6,  0.027s, 0.27),
+      (15.3,  0.019s, 0.26),
+      (19.7,  0.017s, 0.21),
+      (28.5,  0.011s, 0.19),
+      (35.4,  0.009s, 0.13)
+    ]
+    out modal2(freq: 100hz, modes: modos, doublet: 0.17%, strike: 0.42, hard: 0.8)
+  }
+}
+
+# Corpo de ukulele (UIUC laser modal): pares 155/230, cluster ~500,
+# pico ~950 e o FORMANTE 1.5-2khz que da o timbre "feliz". Caixa de 1-2
+# litros: nada abaixo de ~180hz.
+synth corpo_ukulele {
+  poly 1
+  kill after 0.6s
+
+  voice {
+    let modos = [
+      (1.0,   0.06s,  0.9),
+      (1.484, 0.07s,  1.0),
+      (2.323, 0.04s,  0.5),
+      (3.226, 0.045s, 0.5),
+      (6.129, 0.04s,  0.6),
+      (10.65, 0.03s,  0.7),
+      (12.26, 0.025s, 0.5),
+      (16.77, 0.015s, 0.3)
+    ]
+    out modal2(freq: 155hz, modes: modos, doublet: 0.18%, strike: 0.4, hard: 0.85)
+  }
+}
+
+# Corpo de banjo (Politzer/Woodhouse): membrana de mylar 11" - modo (0,1)
+# ~290hz carregado de ar, densidade modal crescendo com f (2D!), formante
+# de cavalete ~580hz e hills ~3k/5k. Decay CURTO (loss ~1e-2): o banjo e
+# alto no ataque e morre logo - "loud then dead".
+synth corpo_banjo {
+  poly 1
+  kill after 0.5s
+
+  voice {
+    let modos = [
+      (1.0,   0.05s,  1.0),
+      (1.448, 0.04s,  0.5),
+      (1.724, 0.045s, 0.7),
+      (2.0,   0.05s,  0.95),
+      (2.469, 0.035s, 0.6),
+      (2.966, 0.03s,  0.55),
+      (3.552, 0.028s, 0.5),
+      (4.276, 0.025s, 0.5),
+      (5.172, 0.022s, 0.45),
+      (6.207, 0.02s,  0.42),
+      (7.586, 0.018s, 0.4),
+      (9.31,  0.016s, 0.45),
+      (10.34, 0.015s, 0.55),
+      (12.41, 0.012s, 0.4),
+      (14.83, 0.01s,  0.35),
+      (17.24, 0.009s, 0.5)
+    ]
+    out modal2(freq: 290hz, modes: modos, doublet: 0.2%, strike: 0.3, hard: 0.9)
+  }
+}
+
+# Corpo de bandolim (Cohen-Rossing, TV holography): A0 272 (f-holes),
+# (0,0) 313/464, (1,0) 570, (0,1) 824, (2,0) 886, sheen largo ~3.5khz.
+synth corpo_bandolim {
+  poly 1
+  kill after 0.6s
+
+  voice {
+    let modos = [
+      (1.0,   0.08s,  1.0),
+      (1.151, 0.06s,  0.7),
+      (1.706, 0.055s, 0.8),
+      (2.096, 0.05s,  0.7),
+      (3.029, 0.04s,  0.5),
+      (3.257, 0.038s, 0.55),
+      (3.29,  0.035s, 0.4),
+      (4.78,  0.03s,  0.4),
+      (7.35,  0.022s, 0.35),
+      (9.93,  0.018s, 0.45),
+      (12.87, 0.014s, 0.5),
+      (15.44, 0.011s, 0.35)
+    ]
+    out modal2(freq: 272hz, modes: modos, doublet: 0.16%, strike: 0.35, hard: 0.85)
+  }
+}
+
+# --------------------------------------------------------------- arco
+
+# Violino solo v2: friccao termica + torsional do bow() v2 fazem o grosso;
+# gesto = arcada com overshoot, vibrato atrasado com drift, pressao que
+# cede. Toque g3..e6.
+synth violino {
+  poly 4 steal oldest
+  gain -1db
+  # vibrato opcional: 0 = senza vibrato (arco reto), 1 = normal,
+  # ate 2 = largo. No score: set vibrato 0 / automate vibrato ...
+  param vibrato: scalar = 1 range 0..2 smooth 60ms
+  kill after 8s
+
+  voice {
+    let vib_depth = env { 0 -> 0 in 250ms curve lin -> 1 in 500ms curve log }
+    let vib_rate_drift = lfo(shape: sample_hold, rate: 1.3hz, amount: 0.4)
+    let vib = lfo(shape: sine, rate: 5.9hz + vib_rate_drift) * vib_depth * vibrato * 0.15st
+    let arco = env { 0 -> 1.0 in 70ms curve exp -> 0.82 in 160ms curve exp
+                     sustain 0.82 release -> 0 in 160ms curve exp }
+    let drift = lfo(shape: sine, rate: 0.35hz, amount: 0.04)
+    # rampa de Guettler: forca sobe JUNTO com a velocidade do arco
+    let pressao = (0.42 + velocity * 0.3) * env { 0.35 -> 1 in 160ms curve exp sustain 1 release -> 0.7 in 120ms curve lin }
+    let corda = bow(freq: hz(note + vib), pressure: pressao, velocity: arco + drift,
+                    position: 0.12, damp: 0.25, noise: 0.09, stroke: 2s)
+    out corda * 0.8
+  }
+
+  bus {
+    convolve(ir: corpo_violino, ir2: corpo_violino_r, dur: 120ms, mix: 45%)
+    reverb(size: 0.7, decay: 1.6s, damp: 6khz, mix: 12%)
+  }
+}
+
+# Viola: corda mais pesada e escura, vibrato mais lento que violino,
+# corpo nasal proprio. Toque c3..c5.
+synth viola {
+  poly 4 steal oldest
+  gain -2db
+  # vibrato opcional: 0 = senza vibrato (arco reto), 1 = normal,
+  # ate 2 = largo. No score: set vibrato 0 / automate vibrato ...
+  param vibrato: scalar = 1 range 0..2 smooth 60ms
+  kill after 8s
+
+  voice {
+    let vib_depth = env { 0 -> 0 in 300ms curve lin -> 1 in 550ms curve log }
+    let vib_rate_drift = lfo(shape: sample_hold, rate: 1.1hz, amount: 0.35)
+    let vib = lfo(shape: sine, rate: 5.6hz + vib_rate_drift) * vib_depth * vibrato * 0.16st
+    let arco = env { 0 -> 0.95 in 90ms curve exp -> 0.8 in 180ms curve exp
+                     sustain 0.8 release -> 0 in 180ms curve exp }
+    let drift = lfo(shape: sine, rate: 0.3hz, amount: 0.04)
+    let pressao = (0.47 + velocity * 0.28) * env { 0.35 -> 1 in 180ms curve exp sustain 1 release -> 0.72 in 130ms curve lin }
+    let corda = bow(freq: hz(note + vib), pressure: pressao, velocity: arco + drift,
+                    position: 0.11, damp: 0.32, noise: 0.09, stroke: 2.3s)
+    out corda * 0.8
+  }
+
+  bus {
+    convolve(ir: corpo_viola, dur: 140ms, mix: 48%)
+    reverb(size: 0.72, decay: 1.7s, damp: 5khz, mix: 13%)
+  }
+}
+
+# Cello v2: arco pesado, vibrato 5hz largo, corpo com os dois hills.
+# Toque c2..a4.
+synth cello {
+  poly 3 steal oldest
+  gain -6db
+  # vibrato opcional: 0 = senza vibrato (arco reto), 1 = normal,
+  # ate 2 = largo. No score: set vibrato 0 / automate vibrato ...
+  param vibrato: scalar = 1 range 0..2 smooth 60ms
+  kill after 9s
+
+  voice {
+    let vib_depth = env { 0 -> 0 in 350ms curve lin -> 1 in 650ms curve log }
+    let vib_rate_drift = lfo(shape: sample_hold, rate: 0.9hz, amount: 0.3)
+    let vib = lfo(shape: sine, rate: 5.0hz + vib_rate_drift) * vib_depth * vibrato * 0.2st
+    let arco = env { 0 -> 0.85 in 130ms curve exp sustain 0.85 release -> 0 in 220ms curve exp }
+    let drift = lfo(shape: sine, rate: 0.28hz, amount: 0.05)
+    let pressao = (0.52 + velocity * 0.24) * env { 0.4 -> 1 in 200ms curve exp sustain 1 release -> 0.75 in 150ms curve lin }
+    let corda = bow(freq: hz(note + vib), pressure: pressao, velocity: arco + drift,
+                    position: 0.10, damp: 0.38, noise: 0.08, stroke: 2.8s)
+    out corda * 0.8
+  }
+
+  bus {
+    convolve(ir: corpo_cello, dur: 200ms, mix: 55%)
+    reverb(size: 0.75, decay: 1.9s, damp: 4khz, mix: 16%)
+  }
+}
+
+# Contrabaixo arco: o mais lento da familia (ataque 100-200ms real),
+# vibrato 4hz, corpo escuro. Toque e1..g3.
+synth contrabaixo {
+  poly 3 steal oldest
+  gain -5db
+  # vibrato opcional: 0 = senza vibrato (arco reto), 1 = normal,
+  # ate 2 = largo. No score: set vibrato 0 / automate vibrato ...
+  param vibrato: scalar = 1 range 0..2 smooth 60ms
+  kill after 10s
+
+  voice {
+    let vib_depth = env { 0 -> 0 in 450ms curve lin -> 1 in 800ms curve log }
+    let vib = lfo(shape: sine, rate: 4.0hz, amount: 1) * vib_depth * vibrato * 0.22st
+    let arco = env { 0 -> 0.8 in 180ms curve exp sustain 0.8 release -> 0 in 280ms curve exp }
+    let pressao = (0.56 + velocity * 0.22) * env { 0.45 -> 1 in 240ms curve exp sustain 1 release -> 0.78 in 180ms curve lin }
+    let corda = bow(freq: hz(note + vib), pressure: pressao, velocity: arco,
+                    position: 0.09, damp: 0.45, noise: 0.07, stroke: 3.2s)
+    out corda * 0.85
+  }
+
+  bus {
+    convolve(ir: corpo_contrabaixo, dur: 220ms, mix: 55%)
+    highpass(cutoff: 42hz, q: 0.5)
+    reverb(size: 0.8, decay: 2s, damp: 3khz, mix: 16%)
+  }
+}
+
+# ----------------------------------------------------------- pizzicato
+
+# Pizz de violino: dedo no meio da corda, decay curto (0.3-1s real),
+# corpo do violino ressoa. Note off = dedo abafa (mute).
+synth violino_pizz {
+  poly 6 steal oldest
+  gain 5db
+  kill after 3s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 30ms curve lin }
+    let corda = string(freq: hz(note), decay: 0.9s, bright: 0.55, position: 0.3,
+                       exciter: finger, hard: 0.3 + velocity * 0.4, pol: 0.5,
+                       mute: abafa)
+    out corda * (0.6 + velocity * 0.4)
+  }
+
+  bus {
+    convolve(ir: corpo_violino, ir2: corpo_violino_r, dur: 120ms, mix: 50%)
+    reverb(size: 0.65, decay: 1.4s, damp: 6khz, mix: 12%)
+  }
+}
+
+# Pizz de cello: mais gordo e longo que violino.
+synth cello_pizz {
+  poly 5 steal oldest
+  gain -2db
+  kill after 4s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 40ms curve lin }
+    let corda = string(freq: hz(note), decay: 1.6s, bright: 0.48, position: 0.32,
+                       exciter: finger, hard: 0.25 + velocity * 0.35, pol: 0.5,
+                       tension: 0.08, mute: abafa)
+    out corda * (0.6 + velocity * 0.4)
+  }
+
+  bus {
+    convolve(ir: corpo_cello, dur: 180ms, mix: 55%)
+    reverb(size: 0.7, decay: 1.6s, damp: 4.5khz, mix: 14%)
+  }
+}
+
+# Pizz de contrabaixo (jazz): puxada forte, fundamental sustenta 1-4s,
+# agudos morrem logo, leve glide de tensao no ataque. Toque e1..g2.
+synth contrabaixo_pizz {
+  poly 4 steal oldest
+  gain -10db
+  kill after 6s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 60ms curve lin }
+    let corda = string(freq: hz(note), decay: 3s, bright: 0.4, position: 0.34,
+                       exciter: thumb, hard: 0.35 + velocity * 0.35, pol: 0.4,
+                       tension: 0.22, stiff: 0.25, mute: abafa)
+    out corda * (0.65 + velocity * 0.4)
+  }
+
+  bus {
+    convolve(ir: corpo_contrabaixo, dur: 200ms, mix: 50%)
+    highpass(cutoff: 40hz, q: 0.5)
+    reverb(size: 0.7, decay: 1.5s, damp: 3khz, mix: 12%)
+  }
+}
+
+# Bartok pizz: a corda estala contra o espelho (colisao real do modelo).
+synth contrabaixo_bartok {
+  poly 4 steal oldest
+  gain -9db
+  kill after 4s
+
+  voice {
+    let corda = string(freq: hz(note), decay: 1.4s, bright: 0.55, position: 0.3,
+                       exciter: snap, hard: 0.6 + velocity * 0.3, pol: 0.4,
+                       tension: 0.3, stiff: 0.25)
+    out corda * (0.6 + velocity * 0.45)
+  }
+
+  bus {
+    convolve(ir: corpo_contrabaixo, dur: 180ms, mix: 50%)
+    reverb(size: 0.7, decay: 1.4s, damp: 3.5khz, mix: 12%)
+  }
+}
+
+# ---------------------------------------------------------- dedilhadas
+
+# Violao nylon: dedo, cordas de nylon (B baixo, so a 3a corda e grossa),
+# corpo A0 100hz + T1 200hz, decay 6-8s. Toque e2..e5.
+synth violao {
+  poly 8 steal oldest spread 30%
+  gain 4db
+  kill after 8s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 220ms curve exp }
+    let corda = string(freq: hz(note), decay: 7s, bright: 0.55, position: 0.3,
+                       exciter: finger, hard: 0.35 + velocity * 0.35, pol: 0.55,
+                       stiff: 0.08, tension: 0.05, mute: abafa)
+    out corda * (0.55 + velocity * 0.5)
+  }
+
+  bus {
+    convolve(ir: corpo_violao, ir2: corpo_violao_r, dur: 200ms, mix: 48%)
+    reverb(size: 0.6, decay: 1.3s, damp: 5khz, mix: 10%)
+  }
+}
+
+# Violao aco (folk): palheta, cordas de aco (B maior, mais brilho e
+# sustain), o mesmo corpo soa mais metalico.
+synth violao_aco {
+  poly 8 steal oldest spread 30%
+  gain 1db
+  kill after 8s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 180ms curve exp }
+    let corda = string(freq: hz(note), decay: 6s, bright: 0.72, position: 0.24,
+                       exciter: pick, hard: 0.5 + velocity * 0.35, pol: 0.5,
+                       stiff: 0.22, tension: 0.07, mute: abafa)
+    out corda * (0.55 + velocity * 0.5)
+  }
+
+  bus {
+    convolve(ir: corpo_violao, ir2: corpo_violao_r, dur: 180ms, mix: 40%)
+    reverb(size: 0.6, decay: 1.2s, damp: 6khz, mix: 9%)
+  }
+}
+
+# Guitarra eletrica limpa: corpo solido nao soa - o "corpo" e o captador
+# (tap fisico no waveguide + ressonancia RLC ~3.4khz). Sustain longo.
+synth guitarra {
+  poly 6 steal oldest spread 20%
+  gain 3db
+  kill after 10s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 150ms curve exp }
+    let corda = string(freq: hz(note), decay: 10s, bright: 0.85, position: 0.16,
+                       exciter: pick, hard: 0.6 + velocity * 0.3, pol: 0.35,
+                       stiff: 0.14, tension: 0.05, pickup: 0.25, mute: abafa)
+    out corda * (0.55 + velocity * 0.5)
+  }
+
+  bus {
+    # RLC do captador single: pico ~3.4khz e -12db/oct acima
+    lowpass(cutoff: 3.4khz, q: 0.95, slope: 12db)
+    saturate(amount: 0.12)
+    reverb(size: 0.5, decay: 0.9s, damp: 5khz, mix: 7%)
+  }
+}
+
+# Baixo eletrico (fingerstyle): fundamental pesada, captador P ~2.5khz,
+# dispersao real de corda grossa. Toque e1..g3.
+synth baixo_eletrico {
+  poly 4 steal oldest
+  gain 6db
+  kill after 12s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 120ms curve exp }
+    let corda = string(freq: hz(note), decay: 11s, bright: 0.58, position: 0.28,
+                       exciter: finger, hard: 0.4 + velocity * 0.3, pol: 0.3,
+                       stiff: 0.3, tension: 0.06, pickup: 0.3, mute: abafa)
+    out corda * (0.6 + velocity * 0.45)
+  }
+
+  bus {
+    lowpass(cutoff: 2.5khz, q: 1.0, slope: 12db)
+    saturate(amount: 0.1)
+  }
+}
+
+# Baixo slap: impulso de velocidade do polegar + colisao com os trastes
+# (o "clank" real). Pop = velocity alta.
+synth baixo_slap {
+  poly 4 steal oldest
+  gain 6db
+  kill after 6s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 90ms curve exp }
+    let corda = string(freq: hz(note), decay: 7s, bright: 0.8, position: 0.14,
+                       exciter: slap, hard: 0.6 + velocity * 0.35, pol: 0.35,
+                       stiff: 0.3, tension: 0.16, pickup: 0.28, mute: abafa)
+    out corda * (0.6 + velocity * 0.5)
+  }
+
+  bus {
+    lowpass(cutoff: 2.8khz, q: 0.95, slope: 12db)
+    compressor(threshold: -14db, ratio: 3, attack: 4ms, release: 90ms)
+    saturate(amount: 0.15)
+  }
+}
+
+# Banjo: corda de aco brilhante sobre membrana - decay curto, formante
+# ~580hz, tension modulation ALTA (o twang e FM, nao inharmonicidade).
+synth banjo {
+  poly 6 steal oldest spread 25%
+  gain -2db
+  kill after 4s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 100ms curve exp }
+    let corda = string(freq: hz(note), decay: 1.2s, bright: 0.85, position: 0.18,
+                       exciter: pick, hard: 0.7 + velocity * 0.25, pol: 0.6,
+                       stiff: 0.16, tension: 0.3, mute: abafa)
+    out corda * (0.55 + velocity * 0.5)
+  }
+
+  bus {
+    convolve(ir: corpo_banjo, dur: 100ms, mix: 55%)
+    reverb(size: 0.45, decay: 0.8s, damp: 6khz, mix: 7%)
+  }
+}
+
+# Ukulele: nylon curto, caixa pequena (nada abaixo de 180hz), formante
+# 1.5-2khz alegre, polpa do dedo arredonda o ataque. Toque c4..a5.
+synth ukulele {
+  poly 6 steal oldest spread 25%
+  gain 3db
+  kill after 4s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 140ms curve exp }
+    let corda = string(freq: hz(note), decay: 2s, bright: 0.62, position: 0.32,
+                       exciter: thumb, hard: 0.5 + velocity * 0.3, pol: 0.5,
+                       stiff: 0.05, mute: abafa)
+    out corda * (0.55 + velocity * 0.5)
+  }
+
+  bus {
+    convolve(ir: corpo_ukulele, dur: 120ms, mix: 50%)
+    reverb(size: 0.5, decay: 0.9s, damp: 6khz, mix: 9%)
+  }
+}
+
+# Bandolim: cursos duplos em unissono desafinados por poucos cents -
+# o batimento do par e a assinatura. Palheta dura, sustain curto
+# (por isso tremolo existe). Toque g3..e6.
+synth bandolim {
+  poly 6 steal oldest spread 25%
+  gain 3db
+  kill after 4s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 120ms curve exp }
+    let c1 = string(freq: hz(note + 2ct), decay: 1.8s, bright: 0.78, position: 0.22,
+                    exciter: pick, hard: 0.65 + velocity * 0.25, pol: 0.5,
+                    stiff: 0.24, mute: abafa)
+    let c2 = string(freq: hz(note - 2ct), decay: 1.7s, bright: 0.76, position: 0.24,
+                    exciter: pick, hard: 0.6 + velocity * 0.25, pol: 0.5,
+                    stiff: 0.24, mute: abafa)
+    out (c1 + c2) * (0.35 + velocity * 0.3)
+  }
+
+  bus {
+    convolve(ir: corpo_bandolim, dur: 120ms, mix: 50%)
+    reverb(size: 0.55, decay: 1s, damp: 6khz, mix: 10%)
+  }
+}
+
+# ------------------------------------------------------------ ensemble
+
+# Secao de violinos v2: 6 estantes fisicas independentes - detune
+# gaussiano fixo, vibratos com taxa/fase proprias, ataques defasados,
+# random walk lento de afinacao por estante (o que separa "secao" de
+# "chorus": nada oscila junto). Corpo compartilhado no bus.
+synth secao_violinos {
+  poly 8 steal oldest
+  gain -8db
+  # vibrato opcional: 0 = senza vibrato (arco reto), 1 = normal,
+  # ate 2 = largo. No score: set vibrato 0 / automate vibrato ...
+  param vibrato: scalar = 1 range 0..2 smooth 60ms
+  kill after 9s
+
+  voice {
+    let vibd = env { 0 -> 0 in 300ms curve lin -> 1 in 550ms curve log }
+    let v1 = lfo(shape: sine, rate: 5.1hz, phase: 0.13) * vibd * vibrato * 0.13st
+    let v2 = lfo(shape: sine, rate: 5.7hz, phase: 0.61) * vibd * vibrato * 0.15st
+    let v3 = lfo(shape: sine, rate: 4.8hz, phase: 0.29) * vibd * vibrato * 0.12st
+    let v4 = lfo(shape: sine, rate: 6.1hz, phase: 0.83) * vibd * vibrato * 0.14st
+    let v5 = lfo(shape: sine, rate: 5.4hz, phase: 0.47) * vibd * vibrato * 0.13st
+    let v6 = lfo(shape: sine, rate: 4.6hz, phase: 0.71) * vibd * vibrato * 0.11st
+    # random walk de afinacao por estante (+-2ct lento, dessincronizado)
+    let w1 = lfo(shape: sample_hold, rate: 0.7hz, amount: 1) * 2ct
+    let w2 = lfo(shape: sample_hold, rate: 0.9hz, amount: 1) * 2ct
+    let w3 = lfo(shape: sample_hold, rate: 0.6hz, amount: 1) * 2ct
+    let w4 = lfo(shape: sample_hold, rate: 0.8hz, amount: 1) * 2ct
+    let w5 = lfo(shape: sample_hold, rate: 0.75hz, amount: 1) * 2ct
+    let w6 = lfo(shape: sample_hold, rate: 0.85hz, amount: 1) * 2ct
+    let a1 = env { 0 -> 0.9 in 95ms curve exp sustain 0.9 release -> 0 in 200ms curve exp }
+    let a2 = env { 0 -> 0.85 in 130ms curve exp sustain 0.85 release -> 0 in 240ms curve exp }
+    let a3 = env { 0 -> 0.92 in 75ms curve exp sustain 0.92 release -> 0 in 180ms curve exp }
+    let a4 = env { 0 -> 0.84 in 150ms curve exp sustain 0.84 release -> 0 in 260ms curve exp }
+    let a5 = env { 0 -> 0.88 in 110ms curve exp sustain 0.88 release -> 0 in 220ms curve exp }
+    let a6 = env { 0 -> 0.87 in 140ms curve exp sustain 0.87 release -> 0 in 210ms curve exp }
+    let p = 0.42 + velocity * 0.26
+    let c1 = bow(freq: hz(note + 7ct + v1 + w1), pressure: p, velocity: a1, position: 0.12, damp: 0.27, noise: 0.09)
+    let c2 = bow(freq: hz(note - 5ct + v2 + w2), pressure: p * 0.96, velocity: a2, position: 0.13, damp: 0.3, noise: 0.09)
+    let c3 = bow(freq: hz(note + 2ct + v3 + w3), pressure: p * 1.04, velocity: a3, position: 0.11, damp: 0.25, noise: 0.09)
+    let c4 = bow(freq: hz(note - 8ct + v4 + w4), pressure: p * 0.92, velocity: a4, position: 0.14, damp: 0.32, noise: 0.09)
+    let c5 = bow(freq: hz(note + 5ct + v5 + w5), pressure: p, velocity: a5, position: 0.12, damp: 0.28, noise: 0.09)
+    let c6 = bow(freq: hz(note - 2ct + v6 + w6), pressure: p * 1.02, velocity: a6, position: 0.1, damp: 0.26, noise: 0.09)
+    out (pan(c1, -0.8) + pan(c2, 0.7) + pan(c3, -0.45) + pan(c4, 0.35)
+       + pan(c5, -0.15) + pan(c6, 0.55)) * 0.34
+  }
+
+  bus {
+    convolve(ir: corpo_violino, ir2: corpo_violino_r, dur: 120ms, mix: 45%)
+    reverb(size: 0.8, decay: 2s, damp: 5khz, predelay: 16ms, mix: 14%)
+  }
+}
+
+# Pizz de secao: 5 estantes de pizzicato defasadas - a "chuva" de dedos.
+synth secao_pizz {
+  poly 8 steal oldest
+  gain 3db
+  kill after 3s
+
+  voice {
+    let abafa = env { 0 -> 0 in 1ms sustain 0 release -> 1 in 35ms curve lin }
+    let c1 = string(freq: hz(note + 6ct), decay: 0.9s, bright: 0.55, position: 0.3, exciter: finger, hard: 0.45, pol: 0.5, mute: abafa)
+    let c2 = string(freq: hz(note - 4ct), decay: 0.85s, bright: 0.52, position: 0.32, exciter: finger, hard: 0.4, pol: 0.5, mute: abafa)
+    let c3 = string(freq: hz(note + 1ct), decay: 0.95s, bright: 0.57, position: 0.28, exciter: finger, hard: 0.5, pol: 0.5, mute: abafa)
+    let c4 = string(freq: hz(note - 7ct), decay: 0.8s, bright: 0.5, position: 0.33, exciter: finger, hard: 0.42, pol: 0.5, mute: abafa)
+    let c5 = string(freq: hz(note + 3ct), decay: 0.88s, bright: 0.54, position: 0.31, exciter: finger, hard: 0.47, pol: 0.5, mute: abafa)
+    out (pan(c1, -0.7) + pan(c2, 0.6) + pan(c3, -0.3) + pan(c4, 0.4)
+       + pan(c5, 0.05)) * 0.4 * (0.6 + velocity * 0.4)
+  }
+
+  bus {
+    convolve(ir: corpo_violino, ir2: corpo_violino_r, dur: 120ms, mix: 50%)
+    reverb(size: 0.75, decay: 1.6s, damp: 5khz, predelay: 14ms, mix: 14%)
+  }
+}

@@ -43,6 +43,18 @@ import "presets/sfx.synth"       # sfx_bell_church, sfx_bell_chime, sfx_coin, sf
 import "presets/physical.synth"  # violino, cello, flauta, flauta_doce, clarinete, sino_real, marimba_fisica,
                                  # trompete, trompa, trombone, coral_*, secao_violinos, secao_stacc
                                  # (modelagem física pura: bow/flute/reed/brass/voz/modal2/convolve)
+import "presets/strings.synth"   # CORDAS SOTA (fisica v2, prefira sobre physical.synth p/ cordas):
+                                 # arco: violino, viola, cello, contrabaixo, secao_violinos
+                                 # todos os arcos tem `param vibrato` (0 = senza/arco reto, 1 =
+                                 # normal, 2 = largo): `set vibrato 0` ou
+                                 # `automate vibrato 8 0 -> 12 1` (abrir vibrato dentro da nota).
+                                 # ATENCAO: param e por SYNTH, nao por track - dois tracks do
+                                 # mesmo synth compartilham o valor
+                                 # pizz: violino_pizz, cello_pizz, contrabaixo_pizz, contrabaixo_bartok, secao_pizz
+                                 # dedilhadas: violao, violao_aco, guitarra, baixo_eletrico, baixo_slap,
+                                 # banjo, ukulele, bandolim (cursos duplos)
+                                 # NAO importe physical.synth E strings.synth juntos: nomes repetidos
+                                 # (violino/cello/secao_violinos) resolvem pro PRIMEIRO import
 ```
 
 Referências para estudar antes de compor no mesmo clima: `examples/songs/<nome>/`
@@ -278,9 +290,29 @@ synth nome {
   Marimba (barra): 1 / 3.932 / 9.538 / 20.06.
 - `nwave(dur: 2.5ms, sharp: 0.9, reflect: 4ms, reflect_gain: 0.4, air: 9khz)` - onda de
   choque coerente: o crack de tiro/trovão que noise filtrado não dá.
-- `bow(freq, pressure, velocity, position, damp, noise: 0.15)` - corda com arco
-  (stick-slip real). `velocity` É a arcada: envelope = nota articula. Passe por
-  convolve de corpo (corpo_violino em ir:/ir2:).
+- `bow(freq, pressure, velocity, position, damp, noise: 0.15, stroke: 2.2s)` -
+  corda com arco v2: friccao TERMICA (breu esquenta no slip e derrapa,
+  esfria no stick), canal torsional (mata o zumbido de Friedlander),
+  reflexao com perda dependente de frequencia, afinacao exata (+-5ct).
+  ARCO FINITO: `stroke` = duracao de uma arcada talao->ponta; no fim da
+  crina o arco VOLTA sozinho (dip suave + re-articulacao, textura relida
+  ao contrario). Metade das notas comeca arcada pra cima (detache real).
+  Cap de Schelleng embutido: pressao com arco parado nao raspa - forca
+  efetiva cresce com a velocidade. Ruido = TEXTURA fractal da crina lida
+  na velocidade do arco (nao e ruido branco; espectro sobe com vb).
+  `velocity` É a arcada: envelope = nota articula. Passe por convolve de
+  corpo (corpo_violino em ir:/ir2:).
+- `string(freq, decay, bright, position, exciter, hard, stiff, pol, tension,
+  pickup, mute, gain)` - corda dedilhada SOTA (2 polarizacoes = decay em 2
+  estagios + batimento; dispersao de corda rigida; excitacao fisica).
+  `exciter`: pick|finger|thumb|slap|snap (slap = impulso de velocidade +
+  colisao de traste; snap = bartok, estala no espelho). `stiff` 0..1 =
+  inharmonicidade (aco > nylon). `tension` = glide de ataque / twang de
+  banjo. `pickup` 0.05-0.35 = tap de captador eletrico (some o corpo, use
+  lowpass ressonante ~2.5-3.4khz no bus). `mute` 0..1 por sample = dedo
+  abafando (env de release = pizz seco). Corpos prontos em
+  presets/strings.synth (violao, banjo, ukulele, bandolim, viola, cello,
+  contrabaixo) - use convolve(ir: corpo_x, dur: 100-200ms, mix: ~50%).
 - `flute(freq, pressure, breath, jet: 0.32)` - jet-drive waveguide (STK/Verge):
   tubo em overblow no 2º modo. pressure útil 0.4..1.3 (remap interno: TODA a
   faixa canta; brilho sobe com pressure); `jet` = balanço harmônico
