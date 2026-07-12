@@ -24,6 +24,7 @@ def main():
     ap.add_argument('--preview', default=None,
                     help='ex: "10,50,90" - salva PNGs nesses segundos e sai')
     ap.add_argument('--crf', type=int, default=17)
+    ap.add_argument('--theme', default='mono', choices=['mono', 'brasil'])
     args = ap.parse_args()
 
     title = args.title or os.path.splitext(os.path.basename(args.score))[0]
@@ -34,7 +35,7 @@ def main():
     feats = analyze(args.audio, args.fps, score)
     print(f"[lumiere] analise: {feats['nf']} frames em {time.time()-t0:.1f}s")
 
-    scene = Scene(feats, score, title, seed=args.seed)
+    scene = Scene(feats, score, title, seed=args.seed, theme=args.theme)
 
     if args.preview:
         for ts in args.preview.split(','):

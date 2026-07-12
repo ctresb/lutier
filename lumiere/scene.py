@@ -16,16 +16,45 @@ POEM = ["the music is not", "the notes", "", "it is what moves", "between", "the
 JPCOL = "音は消えて意味は残る"   # "o som se vai, o sentido fica"
 NOTES_PANEL = ["MELODY OF A", "BONES OF B", "", "SIGNAL FADES", "GROOVE LINGERS"]
 
+THEMES = {
+    'mono': {
+        'poem': POEM, 'vcol': JPCOL, 'vcol_jp': True, 'notes': NOTES_PANEL,
+        'profile': [("ID", "DIWL-88"), ("CLASS", "REMIX"), ("ORIGIN", "DUAL SRC"),
+                    ("KEY", "D MINOR")],
+        'lut': None,
+    },
+    'brasil': {
+        'poem': ["gigante pela", "propria natureza", "", "e o teu futuro", "espelha essa", "grandeza"],
+        'vcol': "ORDEM E PROGRESSO", 'vcol_jp': False,
+        'notes': ["OUVIRAM DO", "IPIRANGA", "", "VERDE E OURO", "SOM E FURIA"],
+        'profile': [("ID", "BR-1822"), ("CLASS", "ANTHEM RMX"), ("ORIGIN", "IPIRANGA"),
+                    ("KEY", "F MAJOR")],
+        # preto -> azul bandeira -> verde -> amarelo ouro -> branco quente
+        'lut': [(0.0, (2, 3, 10)), (0.3, (0, 39, 118)), (0.56, (0, 156, 59)),
+                (0.82, (255, 223, 0)), (1.0, (255, 252, 235))],
+    },
+}
+
 
 def _font(size, bold=False):
     return ImageFont.truetype(MENLO, size, index=1 if bold else 0)
 
 
 class Scene:
-    def __init__(self, feats, score, title, seed=7):
+    def __init__(self, feats, score, title, seed=7, theme='mono'):
         self.f = feats
         self.s = score
         self.title = title.upper()
+        self.theme = THEMES.get(theme, THEMES['mono'])
+        if self.theme['lut']:
+            xs = np.arange(256) / 255.0
+            stops = self.theme['lut']
+            pos = [p for (p, c) in stops]
+            self.lut = np.stack([
+                np.interp(xs, pos, [c[ch] for (p, c) in stops]).astype(np.uint8)
+                for ch in range(3)])
+        else:
+            self.lut = None
         self.rng = np.random.default_rng(seed)
         self.f10 = _font(10)
         self.f12 = _font(12)
@@ -111,7 +140,7 @@ class Scene:
         self._panel(d, x0, 343, x1, 536, "PROFILE LOG")
         self._panel(d, x0, 556, x1, 749, "SIGNAL METRICS")
         self._panel(d, x0, 769, x1, 962, "NOTES")
-        for i, ln in enumerate(NOTES_PANEL):
+        for i, ln in enumerate(self.theme['notes']):
             d.text((x0 + 16, 815 + i * 22), ln, font=self.f13, fill=190)
         d.text((x0 + 16, 919), "...", font=self.f13, fill=140)
 
@@ -127,15 +156,15 @@ class Scene:
 
         # margens externas
         d.text((70, 380), "/ROOT", font=self.f15, fill=210)
-        for i, ln in enumerate(POEM):
+        poem = self.theme['poem']
+        for i, ln in enumerate(poem):
             d.text((1760, 520 + i * 24), ln, font=self.f13, fill=185)
-        d.text((1760, 520 + len(POEM) * 24 + 8), "...", font=self.f13, fill=130)
+        d.text((1760, 520 + len(poem) * 24 + 8), "...", font=self.f13, fill=130)
         d.text((60, 828), "DATA FRAGMENTS", font=self.f13, fill=185)
 
         # labels fixos do perfil
         x0 = self.colL[0]
-        prof = [("ID", "DIWL-88"), ("CLASS", "REMIX"), ("ORIGIN", "DUAL SRC"),
-                ("KEY", "D MINOR"), ("TEMPO", f"{self.s['tempo']:.0f} BPM")]
+        prof = self.theme['profile'] + [("TEMPO", f"{self.s['tempo']:.0f} BPM")]
         for i, (k, v) in enumerate(prof):
             d.text((x0 + 16, 386 + i * 22), k, font=self.f13, fill=160)
             d.text((x0 + 120, 386 + i * 22), v, font=self.f13, fill=230)
@@ -270,11 +299,12 @@ class Scene:
                 ch = KATA[rng.integers(len(KATA))]
                 fnt = self.fjp
             d.text((int(gx), int(gy)), ch, font=fnt, fill=int(50 + rng.random() * 110))
-        # coluna vertical jp
-        if self.fjp:
-            for k, chj in enumerate(JPCOL):
+        # coluna vertical (jp ou latina, conforme tema)
+        vf = self.fjp if self.theme['vcol_jp'] else self.f13
+        if vf:
+            for k, chj in enumerate(self.theme['vcol']):
                 fade = 120 if (i // 8 + k) % 7 else 40
-                d.text((c1 - 52, cy0 + 66 + k * 24), chj, font=self.fjp, fill=fade)
+                d.text((c1 - 52, cy0 + 66 + k * 24), chj, font=vf, fill=fade)
 
     def _left_margin(self, d, i, t):
         # orbital /ROOT
@@ -521,7 +551,12 @@ class Scene:
         g_ch = np.clip((sharp + glow) * post + noise, 0, 255)
         b_ch = np.clip((sharp + np.roll(glow, 2, axis=1)) * post + noise, 0, 255)
         out = np.empty((H, W, 3), np.uint8)
-        out[..., 0] = (r_ch * 0.94).astype(np.uint8)
-        out[..., 1] = (g_ch * 0.97).astype(np.uint8)
-        out[..., 2] = np.clip(b_ch * 1.01, 0, 255).astype(np.uint8)
+        if self.lut is not None:
+            out[..., 0] = self.lut[0][r_ch.astype(np.uint8)]
+            out[..., 1] = self.lut[1][g_ch.astype(np.uint8)]
+            out[..., 2] = self.lut[2][b_ch.astype(np.uint8)]
+        else:
+            out[..., 0] = (r_ch * 0.94).astype(np.uint8)
+            out[..., 1] = (g_ch * 0.97).astype(np.uint8)
+            out[..., 2] = np.clip(b_ch * 1.01, 0, 255).astype(np.uint8)
         return out
