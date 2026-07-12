@@ -1,0 +1,251 @@
+# SUPER GOLDEN: exercita TODO no da engine e toda feature da linguagem.
+# Se qualquer DSP mudar em qualquer lugar, o fingerprint deste render
+# acusa. Organizado em synths por familia; o score toca um por vez
+# (e alguns juntos p/ sidechain).
+
+# -- osciladores classicos + fm + unison + wavetable + ruidos
+synth osciladores {
+  poly 4 steal oldest
+  gain -8db
+
+  voice {
+    let fm = sine(freq: hz(note) * 2, gain: 0.5)
+    let a = sine(freq: note, fm: fm, gain: 0.25)
+          + triangle(freq: note + 12st, gain: 0.12)
+          + saw(freq: note, unison: 5, spread: 12ct, width: 0.7, gain: 0.15)
+          + square(freq: note - 12st, gain: 0.08)
+          + pulse(freq: note, width: 30%, gain: 0.1)
+          + wavetable(freq: note, table: "basic_shapes", pos: 0.4, gain: 0.12)
+          + wavetable(freq: note + 7st, table: "vox", pos: 0.3, gain: 0.08)
+          + wavetable(freq: note, table: "digital", pos: 0.6, gain: 0.06)
+    let amp = adsr(attack: 10ms, decay: 150ms, sustain: 0.7, release: 200ms)
+    out a * amp * velocity
+  }
+}
+
+synth ruidos {
+  poly 2
+  gain -12db
+
+  voice {
+    let n = noise(color: white, gain: 0.1)
+          + noise(color: pink, gain: 0.2)
+          + noise(color: brown, gain: 0.25)
+          + noise(color: blue, gain: 0.06)
+          + noise(color: violet, gain: 0.04)
+          + noise(color: velvet, gain: 0.15)
+          + noise(color: crackle, density: 0.3, gain: 0.2)
+    let amp = adsr(attack: 30ms, decay: 100ms, sustain: 0.8, release: 150ms)
+    out n * amp
+  }
+}
+
+# -- filtros (4 tipos, 12/24db) + ringmod + follower + rms + math
+synth filtros {
+  poly 2
+  gain -8db
+
+  voice {
+    let src = saw(freq: note, unison: 3, spread: 8ct, gain: 0.5)
+    let f1 = lowpass(src, cutoff: 1200hz, q: 0.6, slope: 24db)
+    let f2 = highpass(src, cutoff: 2khz, q: 0.4)
+    let f3 = bandpass(src, cutoff: 800hz, q: 0.8)
+    let f4 = notch(src, cutoff: 1khz, q: 0.5)
+    let rm = ringmod(f2, sine(freq: 90hz, gain: 1), amount: 0.6)
+    let fol = follower(src, attack: 20ms, release: 300ms)
+    let level = rms(src, window: 50ms)
+    let shaped = clamp(f1 + rm * 0.3, -0.8, 0.8) + abs(f3) * 0.1
+                + min(f4, 0.5) * 0.2 + max(f2, -0.5) * 0.1
+    let amp = adsr(attack: 15ms, decay: 100ms, sustain: 0.75, release: 200ms)
+    out shaped * amp * unipolar(fol) * (0.5 + level) * velocity
+  }
+}
+
+# -- nao-lineares com oversampling (amount > 0.5) + delays
+synth sujeira {
+  poly 2
+  gain -9db
+  kill after 4s
+
+  voice {
+    let src = saw(freq: note, gain: 0.6)
+    let d = drive(src, amount: 0.8)
+    let s = saturate(src, amount: 0.7)
+    let c = clip(src * 1.4, level: 0.7)
+    let eco1 = delay1(d)
+    let eco = delay(s, time: 90ms, feedback: 35%)
+    let amp = adsr(attack: 5ms, decay: 200ms, sustain: 0.6, release: 250ms)
+    out (d * 0.3 + s * 0.25 + c * 0.2 + eco1 * 0.1 + eco * 0.25) * amp * velocity
+  }
+
+  bus {
+    delay_fx(time: 200ms, feedback: 45%, mix: 30%)
+    chorus(voices: 3, depth: 30%, rate: 0.4hz, mix: 25%)
+  }
+}
+
+# -- fisica: cordas
+synth fis_cordas {
+  poly 4 steal oldest
+  gain -6db
+  kill after 5s
+
+  voice {
+    let arco = env { 0 -> 0.85 in 100ms curve exp sustain 0.85 release -> 0 in 120ms curve exp }
+    let b = bow(freq: hz(note), pressure: 0.55, velocity: arco, position: 0.12,
+                damp: 0.3, noise: 0.1, stroke: 2s)
+    let s = string(freq: hz(note + 12st), decay: 2.5s, bright: 0.65, position: 0.28,
+                   exciter: pick, hard: 0.6, stiff: 0.2, pol: 0.5, tension: 0.1, pickup: 0.15)
+    let p = pluck(freq: hz(note + 7st), damp: 0.5, decay: 1.5s, position: 0.3)
+    out b * 0.5 + s * 0.3 + p * 0.2
+  }
+}
+
+# -- fisica: modal + nwave + corpo por convolucao
+synth corpo_sg {
+  poly 1
+  kill after 1s
+  voice {
+    let m = [(1.0, 0.1s, 1.0), (1.7, 0.07s, 0.7), (2.6, 0.05s, 0.5)]
+    out modal2(freq: 300hz, modes: m, doublet: 0.1%, strike: 0.4, hard: 0.8)
+  }
+}
+
+synth fis_modal {
+  poly 3 steal oldest
+  gain -7db
+  kill after 6s
+
+  voice {
+    let m1 = modal(freq: hz(note), modes: bell, strike: 0.4, decay: 3s)
+    let tab = [(0.5, 4s, 0.5), (1.0, 3.5s, 1.0), (1.183, 2.5s, 0.8), (2.0, 1.8s, 0.7)]
+    let m2 = modal2(freq: hz(note), modes: tab, doublet: 0.15%, strike: 0.3, hard: 0.7)
+    let nw = nwave(dur: 3ms, sharp: 0.85, reflect: 5ms, air: 12khz)
+    out m1 * 0.3 + m2 * 0.5 + nw * 0.3
+  }
+
+  bus {
+    convolve(ir: corpo_sg, dur: 150ms, mix: 40%)
+  }
+}
+
+# -- fisica: sopros + voz + breath
+synth fis_sopros {
+  poly 3 steal oldest
+  gain -7db
+  kill after 4s
+
+  voice {
+    let p = env { 0 -> 1 in 60ms curve exp sustain 1 release -> 0 in 100ms curve exp }
+    let fl = flute(freq: hz(note + 12st), pressure: p, breath: 0.03)
+    let rd = reed(freq: hz(note), pressure: p * 0.85, stiffness: 0.5)
+    let br = brass(freq: hz(note - 12st), pressure: p * 0.9, lip: 1.0, bell: 1.4khz, rasp: 0.5)
+    let sopro = breath(pressure: 0.6, turbulence: 0.3)
+    out fl * 0.3 + rd * 0.25 + br * 0.3 + lowpass(sopro, cutoff: 2khz, q: 0.3) * 0.05
+  }
+}
+
+synth fis_voz {
+  poly 2
+  gain -7db
+
+  voice {
+    let a = adsr(attack: 90ms, decay: 60ms, sustain: 0.9, release: 250ms)
+    out voz(freq: hz(note), vowel: 0, tipo: tenor, ens: 4, breath: 0.05,
+            vib: 0.15, vib_rate: 5.4hz, jitter: 0.08, shimmer: 0.1) * a
+  }
+}
+
+# -- mod matrix + param + global + builtins (rand, voice_idx, time, dur)
+synth matriz {
+  poly 4 steal oldest
+  gain -8db
+
+  param cutoff: hz = 1800 range 200..8000 smooth 15ms curve log
+
+  global {
+    let respira = lfo(shape: sine, rate: 4beat, amount: 0.15)
+  }
+
+  mod {
+    vib: lfo(shape: sine, rate: 5.5hz, amount: 1) * env { 0 -> 0 in 200ms curve lin -> 1 in 300ms curve log }
+    vib * 0.12 -> voice.pitch
+    velocity -> tone.cutoff range 600..5000
+  }
+
+  voice {
+    let src = saw(freq: note + rand * 4ct - 2ct, unison: 3, spread: 7ct, gain: 0.5)
+    let tone = lowpass(src, cutoff: cutoff, q: 0.5)
+    let ramp = env { 0 -> 1 in dur curve pow(1.6) }
+    let amp = adsr(attack: 12ms, decay: 120ms, sustain: 0.7, release: 180ms)
+    out tone * amp * velocity * (1 + respira) * (0.9 + 0.1 * ramp)
+       * (1 + voice_idx * 0.01) * gate + sine(freq: 40hz, gain: 0) * time
+  }
+}
+
+# -- mono glide legato
+synth deslizante {
+  mono glide 60ms legato
+  gain -8db
+
+  voice {
+    let osc = saw(freq: note, unison: 2, spread: 6ct, gain: 0.5)
+    let amp = adsr(attack: 20ms, decay: 100ms, sustain: 0.8, release: 200ms)
+    out lowpass(osc, cutoff: 2.5khz, q: 0.4) * amp * velocity
+  }
+}
+
+# -- espacializacao e reverbs: reverb, hall, leslie, widen, haas, pan
+synth espaco {
+  poly 3 steal oldest
+  gain -8db
+
+  voice {
+    let a = sine(freq: note, gain: 0.4) + sine(freq: note + 19st, gain: 0.2)
+    let amp = adsr(attack: 8ms, decay: 150ms, sustain: 0.7, release: 300ms)
+    out pan(a * amp * velocity, -0.4) + pan(a * amp * velocity * 0.6, 0.5)
+  }
+
+  bus {
+    leslie(speed: 1, depth: 0.8)
+    widen(amount: 35%)
+    haas(delay: 8ms)
+    reverb(size: 0.7, decay: 1.8s, damp: 5khz, predelay: 14ms, mix: 20%)
+    hall(size: 0.6, decay: 1.5s, damp: 4khz, mix: 15%)
+  }
+}
+
+# -- dinamica com sidechain: bumbo + pad com duck(key:)
+synth bumbo_sg {
+  poly 2
+  gain -4db
+
+  voice {
+    let sweep = env { 90hz -> 40hz in 80ms curve exp }
+    let click = noise(color: white, gain: 0.3) * env { 1 -> 0 in 8ms curve exp }
+    out (sine(freq: sweep, gain: 0.9) + click) * env { 1 -> 0 in 300ms curve exp } * velocity
+  }
+}
+
+synth cama_sg {
+  poly 6 steal oldest
+  gain -9db
+
+  voice {
+    let osc = saw(freq: note, unison: 4, spread: 10ct, gain: 0.4)
+    let amp = adsr(attack: 200ms, decay: 300ms, sustain: 0.8, release: 500ms)
+    out lowpass(osc, cutoff: 1.5khz, q: 0.3) * amp * velocity
+  }
+
+  bus {
+    compressor(threshold: -20db, ratio: 3, attack: 10ms, release: 150ms)
+    duck(key: bumbo_sg, threshold: -30db, ratio: 4, attack: 5ms, release: 200ms)
+    limiter(ceiling: -3db, lookahead: 4ms, release: 60ms)
+  }
+}
+
+master {
+  bus_gain -1db
+  compressor(threshold: -16db, ratio: 2, attack: 12ms, release: 180ms)
+  limiter(ceiling: -1db, lookahead: 5ms, release: 70ms)
+}

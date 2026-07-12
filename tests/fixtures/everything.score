@@ -1,0 +1,60 @@
+tempo 112
+tempo 40 96
+
+section um 20
+track osc osciladores
+swing 55
+humanize 5ms 6%
+0 c3 1 0.8
+1 e3 0.5 0.7
+2 [g3 b3 d4] 2 0.85
+4 c4 0.25 0.6 x8 @0.5
+
+track nz ruidos
+8 c4 2 0.7
+
+track ft filtros
+10 a2 2 0.8
+12 [d3 a3] 2 0.75
+
+track sj sujeira
+14 e2 1.5 0.85
+16 a2 2 0.8
+
+section dois 24
+track fc fis_cordas
+0 g3 2 0.8
+2.5 d4 2 0.75
+
+track fm fis_modal
+5 a4 2 0.9
+
+track fs fis_sopros
+8 c4 2 0.8
+
+track fv fis_voz
+11 a3 2.5 0.85
+
+track mx matriz
+set cutoff 1200
+automate cutoff 14 600 -> 18 5000 curve log
+14 c3 0.5 0.7 x6 @0.5
+17 [c4 e4 g4] 2 0.85
+
+track dz deslizante
+20 c3 1 0.8
+20.8 g3 1 0.8
+21.6 c4 1.5 0.85
+
+section tres 16
+track es espaco
+0 a3 3 0.8
+4 [d4 f#4] 3 0.75
+
+track bm bumbo_sg
+8 c2 0.3 0.95 x8 @1
+
+track cm cama_sg
+8 [a2 e3 a3] 8 0.8
+
+arrange um dois tres dois

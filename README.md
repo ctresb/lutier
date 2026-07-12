@@ -149,7 +149,7 @@ Instrumentos prontos em `presets/`, importáveis com `import "presets/<nome>.syn
 
 ## Exemplos
 
-Os scores de referência vivem em `tests/fixtures/` e fazem dupla função: são os goldens de regressão e a documentação viva de escrita. `demo` é uma peça curta com os presets (cordas físicas, bateria, baixo), `features` exercita a DSL de score inteira, `physics` toca cada primitivo de modelagem física e `showcase` percorre os SFX.
+Os scores de referência vivem em `tests/fixtures/` e fazem dupla função: são os goldens de regressão e a documentação viva de escrita. `everything` é o super golden (todo nó da engine e toda feature da DSL de score num render só), `demo` é uma peça curta com os presets (cordas físicas, bateria, baixo) e `showcase` percorre os SFX.
 
 ```sh
 ./target/release/lutier tests/fixtures/demo.synth tests/fixtures/demo.score -o out/demo.wav

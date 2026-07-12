@@ -34,27 +34,29 @@ fn golden_case(name: &str, synth: &str, score: &str) {
 }
 
 // Fixtures sao scores PROJETADOS para cobertura (nao musicas legadas):
-//  demo     - peca curta com presets reais (cordas fisicas, bateria,
-//             baixo) + master chain; tambem e o exemplo do README
-//  features - a DSL de score inteira (sections/arrange, swing, humanize,
-//             automate, tempo map, acordes, repeticao)
-//  physics  - um synth por primitivo fisico (bow, string, flute, reed,
-//             brass, voz, modal2, nwave+convolve)
-//  showcase - todos os presets de SFX
+//  everything - o SUPER GOLDEN: todo no da engine (osciladores, ruidos,
+//               filtros, nao-lineares+oversampling, delays, fisica de
+//               cordas/modal/sopros/voz, mod matrix, params, mono glide,
+//               espacializacao, sidechain) e toda a DSL de score
+//               (sections/arrange, tempo map, swing, humanize, acordes,
+//               repeticao, set, automate). Qualquer DSP que mudar em
+//               qualquer lugar, este fingerprint acusa.
+//  demo       - peca curta com presets reais (cordas fisicas, bateria,
+//               baixo); tambem e o exemplo do README
+//  showcase   - todos os presets de SFX
+
+#[test]
+fn golden_everything() {
+    golden_case(
+        "everything",
+        "tests/fixtures/everything.synth",
+        "tests/fixtures/everything.score",
+    );
+}
 
 #[test]
 fn golden_demo() {
     golden_case("demo", "tests/fixtures/demo.synth", "tests/fixtures/demo.score");
-}
-
-#[test]
-fn golden_score_features() {
-    golden_case("features", "tests/fixtures/features.synth", "tests/fixtures/features.score");
-}
-
-#[test]
-fn golden_physics() {
-    golden_case("physics", "tests/fixtures/physics.synth", "tests/fixtures/physics.score");
 }
 
 #[test]
