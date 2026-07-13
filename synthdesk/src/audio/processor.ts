@@ -4,9 +4,12 @@
 // igual no vite dev, no build e no webview do tauri).
 //
 // por que uma engine e nao OscillatorNode/GainNode nativos:
-// - o patch inteiro (osc, noise, reverb, volume, mix, math) e avaliado
-//   por amostra num unico processor; qualquer out pluga em qualquer in,
-//   cv modula audio em taxa de audio (a lei da mesa: tudo e tensao)
+// - o patch inteiro (osc, noise, reverb, device, sequencer, volume,
+//   gain, channel, mix, math) e avaliado por amostra num unico
+//   processor; qualquer out pluga em qualquer in, cv modula audio em
+//   taxa de audio (a lei da mesa: tudo e tensao)
+// - o caminho e ESTEREO: cada node avalia L (retorno) e R (memoR;
+//   ausente = mono, R igual a L). channel faz balance de verdade
 // - a fase de cada oscilador vive AQUI, indexada pelo id do node: plugar
 //   ou desplugar cabo nao reinicia nada, o sinal ja estava correndo
 //   (a "rede" da mesa, ver components/oscillator.ts)
@@ -14,8 +17,18 @@
 //   novo: zero clique ao plugar cabo
 // - ciclos de cabo resolvem com 1 amostra de atraso (feedback real de
 //   mesa modular), nunca travam
+// - DEVICE: instrumento tocavel - transpoe os osciladores do seu cone
+//   de entrada (pilha de pitch, 2^((nota-60)/12)) e aplica ADSR; as
+//   propriedades (attack/decay/sustain/release) vem do componente
+//   envelope plugado no ENV
+// - SEQUENCER: relogio proprio por node, 8 passos, manda o passo atual
+//   de volta pro ui via port.postMessage (playhead exato, sem drift)
 // - saw/square com polyblep (mesma tecnica da engine rust do lutier),
-//   knobs suavizados (sem zipper), dc blocker e soft clip na saida
+//   knobs suavizados (sem zipper), dc blocker e soft clip por canal
+//
+// cabos chegam como ins[porta] = { n: idDaFonte, p: portaDaFonte } -
+// fontes multi-out (sequencer: note + gate) publicam as saidas extras
+// no memo com chave 'id:porta'.
 
 export const PROCESSOR_NAME = 'desk-engine'
 
@@ -24,6 +37,8 @@ const XFADE = 256                       // ~5ms de crossfade de topologia
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v)
 // mesma curva de oitavas do knob (components/oscillator.ts)
 const oscFreq = (v) => 20 * (Math.pow(2, clamp01(v) * 7) - 1)
+// cv 0..1 -> nota midi 36..84 (mesma regua do sequencer e do device)
+const cvNote = (v) => 36 + clamp01(v) * 48
 
 // polyblep: suaviza a descontinuidade de saw/square na largura de 1
 // amostra; mata o aliasing sem mudar o timbre
@@ -44,11 +59,12 @@ class DeskEngine extends AudioWorkletProcessor {
     this.oldNodes = null                // patch anterior durante o crossfade
     this.oldOut = 0
     this.xfade = 0
-    this.st = new Map()                 // id -> estado dsp {ph, hz, p}
-    this.prev = new Map()               // id -> out da amostra anterior (ciclos)
+    this.st = new Map()                 // id -> estado dsp
+    this.prev = new Map()               // id -> out L da amostra anterior (ciclos)
     this.master = 0
-    this.x1 = 0                         // dc blocker
-    this.y1 = 0
+    this.x1l = 0; this.y1l = 0          // dc blocker por canal
+    this.x1r = 0; this.y1r = 0
+    this.pitch = 1                      // pilha de transposicao dos devices
     this.kParam = 1 - Math.exp(-1 / (0.015 * sampleRate))
     this.kMaster = 1 - Math.exp(-1 / (0.008 * sampleRate))
     this.port.onmessage = (e) => this.patch(e.data)
@@ -103,7 +119,21 @@ class DeskEngine extends AudioWorkletProcessor {
     return c
   }
 
-  evalNode(id, nodes, memo, visiting) {
+  // avalia uma porta de entrada: ref = {n, p}; retorna o L e deixa o
+  // R correspondente em this.lastR (mono: R = L)
+  inL(ref, nodes, memo, memoR, visiting) {
+    if (!ref) { this.lastR = 0; return 0 }
+    const l = this.evalNode(ref.n, nodes, memo, memoR, visiting)
+    if (ref.p && ref.p !== 'out' && memo.has(ref.n + ':' + ref.p)) {
+      const pv = memo.get(ref.n + ':' + ref.p)
+      this.lastR = pv
+      return pv
+    }
+    this.lastR = memoR.has(ref.n) ? memoR.get(ref.n) : l
+    return l
+  }
+
+  evalNode(id, nodes, memo, memoR, visiting) {
     if (!id) return 0
     if (memo.has(id)) return memo.get(id)
     const n = nodes.get(id)
@@ -111,22 +141,24 @@ class DeskEngine extends AudioWorkletProcessor {
     if (visiting.has(id)) return this.prev.get(id) ?? 0  // ciclo: 1 amostra de atraso
     visiting.add(id)
     let v = 0
+    let r = null // saida R quando difere do L
 
     if (n.type === 'oscillator') {
       const s = this.state(n)
       if (n.ins.freq) {
         // cv no port FREQ em taxa de AUDIO: pot da altura, oscilador
-        // da fm exponencial de graca
-        s.hz = oscFreq(this.evalNode(n.ins.freq, nodes, memo, visiting))
+        // da fm exponencial
+        s.hz = oscFreq(this.inL(n.ins.freq, nodes, memo, memoR, visiting))
       } else {
         s.hz += this.kParam * (oscFreq(n.params.freq ?? 0) - s.hz)
       }
-      const dt = Math.max(s.hz / sampleRate, 1e-9)
+      // this.pitch = transposicao do device dono do cone (1 fora)
+      const dt = Math.max((s.hz * this.pitch) / sampleRate, 1e-9)
       const t = s.ph
       const w = n.params.wave ?? 0
       if (w === 1) {                                // square + polyblep
         v = (t < 0.5 ? 1 : -1) + blep(t, dt) - blep((t + 0.5) % 1, dt)
-      } else if (w === 2) {                         // triangle (harmonicos caem 12db/oit, alias desprezivel no range da mesa)
+      } else if (w === 2) {                         // triangle
         v = 4 * Math.abs(t - 0.5) - 1
       } else if (w === 3) {                         // saw + polyblep
         v = 2 * t - 1 - blep(t, dt)
@@ -134,27 +166,6 @@ class DeskEngine extends AudioWorkletProcessor {
         v = Math.sin(t * 2 * Math.PI)
       }
       s.ph = (t + dt) % 1
-    } else if (n.type === 'volume') {
-      const k = this.sp(this.state(n), 'value', n.params.value ?? 0)
-      // sem nada no IN o knob vira fonte de tensao (mesma lei do cvOut)
-      v = n.ins.in ? this.evalNode(n.ins.in, nodes, memo, visiting) * k : k
-    } else if (n.type === 'mix') {
-      const s = this.state(n)
-      const a = n.ins.a ? this.evalNode(n.ins.a, nodes, memo, visiting) : 0
-      const b = n.ins.b ? this.evalNode(n.ins.b, nodes, memo, visiting) : 0
-      v = a * this.sp(s, 'ka', n.params.ka ?? 0) + b * this.sp(s, 'kb', n.params.kb ?? 0)
-    } else if (n.type === 'math') {
-      const a = n.ins.a ? this.evalNode(n.ins.a, nodes, memo, visiting) : 0
-      const b = n.ins.b ? this.evalNode(n.ins.b, nodes, memo, visiting) : 0
-      switch (n.params.op ?? 0) {
-        case 1: v = a - b; break
-        case 2: v = a * b; break
-        case 3: v = b === 0 ? 0 : a / b; break
-        case 4: v = Math.min(a, b); break
-        case 5: v = Math.max(a, b); break
-        case 6: v = (a + b) / 2; break
-        default: v = a + b
-      }
     } else if (n.type === 'noise') {
       const s = this.state(n)
       if (s.rng === undefined) {
@@ -165,9 +176,8 @@ class DeskEngine extends AudioWorkletProcessor {
       s.rng ^= s.rng >>> 17
       s.rng ^= s.rng << 5; s.rng >>>= 0
       const u = s.rng / 4294967296
-      // density = chance por amostra de renovar o sample (mapeada em
-      // decadas: 1 = white pleno, 0.5 = lo-fi granulado ~1.4khz,
-      // 0 = quase estalos); segura o ultimo valor no resto
+      // density = chance por amostra de renovar o sample (decadas:
+      // 1 = white pleno, 0.5 = lo-fi ~1.4khz, 0 = quase estalos)
       const density = clamp01(n.params.density ?? 1)
       const p = Math.pow(10, (density - 1) * 3)
       if (u < p || density >= 1) {
@@ -193,10 +203,136 @@ class DeskEngine extends AudioWorkletProcessor {
       } else {
         v = w * 0.8 // white
       }
-      v *= this.sp(s, 'level', n.params.level ?? 0.8)
+      v *= this.sp(this.state(n), 'level', n.params.level ?? 0.8)
+    } else if (n.type === 'volume') {
+      const k = this.sp(this.state(n), 'value', n.params.value ?? 0)
+      if (n.ins.in) {
+        v = this.inL(n.ins.in, nodes, memo, memoR, visiting) * k
+        r = this.lastR * k
+      } else {
+        v = k // sem nada no IN o knob vira fonte de tensao
+      }
+    } else if (n.type === 'gain') {
+      // amplificador: knob 0..1 -> ganho 0..2 (0.5 = unitario)
+      const k = this.sp(this.state(n), 'value', n.params.value ?? 0.5) * 2
+      if (n.ins.in) {
+        v = this.inL(n.ins.in, nodes, memo, memoR, visiting) * k
+        r = this.lastR * k
+      } else {
+        v = k
+      }
+    } else if (n.type === 'channel') {
+      // balance L/R: centro passa reto, extremo cala o outro lado
+      const pan = this.sp(this.state(n), 'pan', n.params.pan ?? 0.5)
+      const inl = n.ins.in ? this.inL(n.ins.in, nodes, memo, memoR, visiting) : 0
+      const inr = n.ins.in ? this.lastR : 0
+      v = inl * Math.min(1, (1 - pan) * 2)
+      r = inr * Math.min(1, pan * 2)
+    } else if (n.type === 'mix') {
+      const s = this.state(n)
+      const ka = this.sp(s, 'ka', n.params.ka ?? 0)
+      const kb = this.sp(s, 'kb', n.params.kb ?? 0)
+      let al = 0, ar = 0, bl = 0, br = 0
+      if (n.ins.a) { al = this.inL(n.ins.a, nodes, memo, memoR, visiting); ar = this.lastR }
+      if (n.ins.b) { bl = this.inL(n.ins.b, nodes, memo, memoR, visiting); br = this.lastR }
+      v = al * ka + bl * kb
+      const rr = ar * ka + br * kb
+      if (rr !== v) r = rr
+    } else if (n.type === 'math') {
+      let al = 0, ar = 0, bl = 0, br = 0
+      if (n.ins.a) { al = this.inL(n.ins.a, nodes, memo, memoR, visiting); ar = this.lastR }
+      if (n.ins.b) { bl = this.inL(n.ins.b, nodes, memo, memoR, visiting); br = this.lastR }
+      const op = (a, b) => {
+        switch (n.params.op ?? 0) {
+          case 1: return a - b
+          case 2: return a * b
+          case 3: return b === 0 ? 0 : a / b
+          case 4: return Math.min(a, b)
+          case 5: return Math.max(a, b)
+          case 6: return (a + b) / 2
+          default: return a + b
+        }
+      }
+      v = op(al, bl)
+      const rr = op(ar, br)
+      if (rr !== v) r = rr
+    } else if (n.type === 'sequencer') {
+      const s = this.state(n)
+      if (s.sph === undefined) { s.sph = 0; s.lastStep = -1 }
+      const rate = clamp01(n.params.rate ?? 0.5)
+      const hz = Math.pow(2, rate * 4) // 1..16 passos/s
+      s.sph += hz / sampleRate
+      const pos = s.sph % 8
+      const step = Math.floor(pos)
+      if (step !== s.lastStep) {
+        s.lastStep = step
+        // playhead exato de volta pro ui (sem drift visual)
+        this.port.postMessage({ seq: n.id, step })
+      }
+      const active = (n.params['step' + (step + 1)] ?? 0) > 0.5
+      const gate = active && pos - step < 0.8 ? 1 : 0 // duty 80%: re-articula
+      // saidas: default = gate; note publicada como porta extra
+      v = gate
+      memo.set(id + ':gate', gate)
+      memo.set(id + ':note', clamp01(n.params.pitch ?? 0.5))
+    } else if (n.type === 'device') {
+      const s = this.state(n)
+      if (s.lv === undefined) { s.lv = 0; s.stage = 0; s.g = 0 }
+      // nota e gate: cabo ganha do param (teclado/vars escrevem no param)
+      const gate = n.ins.gate
+        ? (this.inL(n.ins.gate, nodes, memo, memoR, visiting) > 0.5 ? 1 : 0)
+        : ((n.params.gate ?? 0) > 0.5 ? 1 : 0)
+      const note = n.ins.note
+        ? cvNote(this.inL(n.ins.note, nodes, memo, memoR, visiting))
+        : (n.params.note ?? 60)
+      // propriedades: componente envelope plugado no ENV (parametros
+      // lidos direto - propriedade e descricao, nao sinal)
+      let atk = 0.004, dec = 0.05, sus = 1, rel = 0.03
+      const env = n.ins.env ? nodes.get(n.ins.env.n) : null
+      if (env && env.type === 'envelope' && env.on) {
+        atk = 0.002 + Math.pow(env.params.attack ?? 0.05, 2) * 2
+        dec = 0.005 + Math.pow(env.params.decay ?? 0.3, 2) * 2
+        sus = clamp01(env.params.sustain ?? 0.7)
+        rel = 0.005 + Math.pow(env.params.release ?? 0.25, 2) * 3
+      }
+      // adsr: ataque/release lineares, decay exponencial pro sustain
+      if (gate > 0 && s.g === 0) s.stage = 1
+      if (gate === 0 && s.g === 1) s.stage = 4
+      s.g = gate
+      if (s.stage === 1) {
+        s.lv += 1 / (atk * sampleRate)
+        if (s.lv >= 1) { s.lv = 1; s.stage = 2 }
+      } else if (s.stage === 2) {
+        s.lv += (sus - s.lv) * (1 - Math.exp(-1 / (dec * sampleRate)))
+        if (Math.abs(s.lv - sus) < 1e-3) s.stage = 3
+      } else if (s.stage === 3) {
+        s.lv = sus
+      } else if (s.stage === 4) {
+        s.lv -= 1 / (rel * sampleRate)
+        if (s.lv <= 0) { s.lv = 0; s.stage = 0 }
+      } else {
+        s.lv = 0
+      }
+      // transposicao do cone de entrada: osciladores rio acima tocam
+      // a nota (pilha: device dentro de device compoe)
+      const keep = this.pitch
+      this.pitch = keep * Math.pow(2, (note - 60) / 12)
+      const il = n.ins.in ? this.inL(n.ins.in, nodes, memo, memoR, visiting) : 0
+      const ir = n.ins.in ? this.lastR : 0
+      this.pitch = keep
+      v = il * s.lv
+      if (ir !== il) r = ir * s.lv
+    } else if (n.type === 'envelope') {
+      // propriedade de device; como sinal, emite o sustain (dc)
+      v = clamp01(n.params.sustain ?? 0.7)
     } else if (n.type === 'reverb') {
       const s = this.state(n)
-      const x = n.ins.in ? this.evalNode(n.ins.in, nodes, memo, visiting) : 0
+      // entrada mono-izada (reverb da mesa e mono, sala unica)
+      let x = 0
+      if (n.ins.in) {
+        const l = this.inL(n.ins.in, nodes, memo, memoR, visiting)
+        x = (l + this.lastR) * 0.5
+      }
       // walls chega normalizado 0..1 (slider com 6 detents) -> 3..8
       const walls = 3 + Math.round(clamp01(n.params.walls ?? 0.4) * 5)
       const type = n.params.type ?? 0
@@ -235,22 +371,23 @@ class DeskEngine extends AudioWorkletProcessor {
         c.i = (c.i + 1) % c.buf.length
         acc += out
       }
-      let r = acc / s.combs.length
+      let rv = acc / s.combs.length
       for (const a of s.aps) {
         // allpass em serie difunde a cauda
         const b = a.buf[a.i]
-        const y = b - 0.5 * r
-        a.buf[a.i] = r + 0.5 * y
+        const y = b - 0.5 * rv
+        a.buf[a.i] = rv + 0.5 * y
         a.i = (a.i + 1) % a.buf.length
-        r = y
+        rv = y
       }
       const dry = this.sp(s, 'dry', n.params.dry ?? 0.8)
       const wet = this.sp(s, 'wet', n.params.wet ?? 0.35)
-      v = x * dry + r * wet
+      v = x * dry + rv * wet
     }
 
     if (!Number.isFinite(v)) v = 0
     memo.set(id, v)
+    if (r !== null && Number.isFinite(r) && r !== v) memoR.set(id, r)
     visiting.delete(id)
     return v
   }
@@ -259,31 +396,42 @@ class DeskEngine extends AudioWorkletProcessor {
     const out = outputs[0]
     const ch0 = out && out[0]
     if (!ch0) return true
+    const ch1 = out[1] ?? ch0
     const tgt = this.on ? this.level : 0
+    const rootRef = { n: this.out, p: 'out' }
+    const oldRef = { n: this.oldOut, p: 'out' }
     for (let i = 0; i < ch0.length; i++) {
       const memo = new Map()
-      let v = this.evalNode(this.out, this.nodes, memo, new Set())
+      const memoR = new Map()
+      let l = this.inL(rootRef, this.nodes, memo, memoR, new Set())
+      let r = this.lastR
       if (this.xfade > 0 && this.oldNodes) {
         // memo compartilhado: node presente nos dois patches avalia (e
         // avanca fase) UMA vez so
-        const vo = this.evalNode(this.oldOut, this.oldNodes, memo, new Set())
+        const lo = this.inL(oldRef, this.oldNodes, memo, memoR, new Set())
+        const ro = this.lastR
         const f = this.xfade / XFADE
-        v = vo * f + v * (1 - f)
+        l = lo * f + l * (1 - f)
+        r = ro * f + r * (1 - f)
         this.xfade--
         if (this.xfade === 0) this.oldNodes = null
       }
-      for (const [id, val] of memo) this.prev.set(id, val)
-      // dc blocker: pot plugado direto no speaker e tensao continua
-      // legitima na mesa, mas nao vira dc no alto-falante
-      const y = v - this.x1 + 0.9995 * this.y1
-      this.x1 = v
-      this.y1 = y
+      for (const [k, val] of memo) {
+        if (typeof k === 'number') this.prev.set(k, val)
+      }
+      // dc blocker por canal: pot plugado direto no speaker e tensao
+      // continua legitima na mesa, mas nao vira dc no alto-falante
+      const yl = l - this.x1l + 0.9995 * this.y1l
+      this.x1l = l; this.y1l = yl
+      const yr = r - this.x1r + 0.9995 * this.y1r
+      this.x1r = r; this.y1r = yr
       this.master += this.kMaster * (tgt - this.master)
       // soft clip com joelho em 0.5: nivel nominal passa reto,
       // sobrecarga comprime em vez de estourar
-      ch0[i] = Math.tanh(y * this.master * 2) * 0.5
+      ch0[i] = Math.tanh(yl * this.master * 2) * 0.5
+      ch1[i] = Math.tanh(yr * this.master * 2) * 0.5
     }
-    for (let c = 1; c < out.length; c++) out[c].set(ch0)
+    for (let c = 2; c < out.length; c++) out[c].set(ch0)
     return true
   }
 }

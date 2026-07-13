@@ -15,8 +15,19 @@ import { PROCESSOR_JS, PROCESSOR_NAME } from './processor'
 
 const LEVEL = 0.16 // teto de seguranca por speaker
 
+// playhead dos sequencers, reportado pela engine (passo exato, sem
+// drift visual); o drawExtra do sequencer le daqui
+export const seqSteps = new Map<number, number>()
+
 interface EnginePatch {
-  nodes: { id: number; type: string; on: boolean; ins: Record<string, number>; params: Record<string, number> }[]
+  // ins[porta] = referencia {n: id da fonte, p: porta da fonte}
+  nodes: {
+    id: number
+    type: string
+    on: boolean
+    ins: Record<string, { n: number; p: string }>
+    params: Record<string, number>
+  }[]
   out: number
   on: boolean
   level: number
@@ -86,11 +97,11 @@ export class DeskAudio {
       seen.add(id)
       const n = graph.node(id)
       if (!n) return
-      const ins: Record<string, number> = {}
+      const ins: Record<string, { n: number; p: string }> = {}
       for (const p of spec(n.type).inputs) {
         const c = graph.cables.find((k) => k.to.node === id && k.to.port === p.id)
         if (c) {
-          ins[p.id] = c.from.node
+          ins[p.id] = { n: c.from.node, p: c.from.port }
           walk(c.from.node)
         }
       }
@@ -120,6 +131,10 @@ export class DeskAudio {
           numberOfInputs: 0,
           outputChannelCount: [2],
         })
+        // engine reporta o playhead dos sequencers (passo atual)
+        engine.port.onmessage = (e) => {
+          if (typeof e.data?.seq === 'number') seqSteps.set(e.data.seq, e.data.step)
+        }
         engine.connect(ctx.destination)
         chain.engine = engine
         // manda o patch que chegou durante o carregamento

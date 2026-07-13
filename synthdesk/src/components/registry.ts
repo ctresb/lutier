@@ -1,9 +1,14 @@
 import type { ComponentSpec } from './spec'
+import { channel } from './channel'
+import { device } from './device'
+import { envelope } from './envelope'
+import { gain } from './gain'
 import { math } from './math'
 import { mix } from './mix'
 import { noise } from './noise'
 import { oscillator } from './oscillator'
 import { reverb } from './reverb'
+import { sequencer } from './sequencer'
 import { speaker } from './speaker'
 import { volume } from './volume'
 
@@ -11,12 +16,17 @@ import { volume } from './volume'
 // ficam juntos (o box agrupa por category)
 export const COMPONENTS: ComponentSpec[] = [
   speaker, // primitives
+  device,
   volume, // controllers
+  gain,
+  channel,
+  sequencer,
   math, // operators
   mix,
   oscillator, // generators
   noise,
   reverb, // effects
+  envelope, // properties
 ]
 
 const byType = new Map(COMPONENTS.map((m) => [m.type, m]))

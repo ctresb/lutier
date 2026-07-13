@@ -28,9 +28,31 @@ Frontend sem framework: TypeScript puro + um unico canvas 2d.
 - `src/components/` a BASE (`spec.ts`: tamanho em unidades de 46px,
   inputs/outputs, knobs, sliders) + registry; componente so desenha o
   miolo - moldura, header e a faixa de io padronizada sao da base.
-  Componentes por categoria (o box agrupa): PRIMITIVES speaker /
-  CONTROLLERS volume / OPERATORS math, mix / GENERATORS oscillator,
-  noise / EFFECTS reverb
+  Componentes por categoria (o box agrupa): PRIMITIVES speaker,
+  device / CONTROLLERS volume, gain, channel, sequencer / OPERATORS
+  math, mix / GENERATORS oscillator, noise / EFFECTS reverb /
+  PROPERTIES envelope
+- `src/core/project.ts` projeto .synthproj: save/load que grava TUDO
+  (componentes com posicao/params/lock/nome, cabos com waypoints,
+  contadores de id, camera, snap). Dialog nativo no tauri (comandos
+  save_project/load_project + plugin dialog), file system access no
+  browser (fallback download/input). AUTOSAVE a cada 2s: sempre no
+  localStorage (reload restaura a sessao) e, com arquivo ja definido,
+  no proprio arquivo; asterisco no SUBJECT = mudanca sem salvar.
+  Atalhos: cmd+s salva, cmd+shift+s salva como, cmd+o abre; toolbox
+  tem SAVE PROJECT / LOAD PROJECT
+- `src/core/vars.ts` variaveis globais: todo componente expoe cada
+  param como NOME_PARAM (OSC_01_ACTIVE, OSC_01_WAVE, DEV_01_NOTE...)
+  via `window.desk.vars` (list/get/set) - superficie de automacao;
+  set aceita numero cru, TRUE/FALSE e rotulo de selector (SQUARE)
+- DEVICE: instrumento tocavel. IN = timbre (a cadeia plugada),
+  NOTE/GATE = quem toca (sequencer por cabo, teclado Z-M com o
+  device selecionado, ou vars), ENV = propriedades (componente
+  envelope com attack/decay/sustain/release). A nota transpoe os
+  osciladores do cone de entrada (pilha de pitch na engine)
+- SEQUENCER: 8 passos, PITCH e RATE; playhead exato reportado pela
+  engine via port.postMessage (sem drift visual)
+- caminho de audio ESTEREO na engine; CHANNEL faz balance L/R real
 - `src/audio/` a engine de audio: `processor.ts` e um AudioWorklet
   (via Blob URL) que roda o dsp do patch inteiro por amostra no audio
   thread - fase dos osciladores persiste por id (plugar cabo nao

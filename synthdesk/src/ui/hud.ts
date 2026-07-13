@@ -15,6 +15,7 @@ export type Status =
   | 'ROUTING'
   | 'SELECTING'
 
+const subject = el('hud-subject')
 const status = el('hud-status')
 const hx = el('hud-x')
 const hy = el('hud-y')
@@ -26,6 +27,11 @@ const snap = el('hud-snap')
 
 export function setStatus(s: Status): void {
   status.textContent = s
+}
+
+// nome do projeto no header (SUBJECT // NOME); * = mudanca sem salvar
+export function setSubject(name: string, dirty = false): void {
+  subject.textContent = `${name}${dirty ? ' *' : ''}`
 }
 
 export function setCoords(x: number, y: number): void {

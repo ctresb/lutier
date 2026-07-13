@@ -12,6 +12,8 @@ import { CrtFx } from './render/crt'
 import { Renderer } from './render/renderer'
 import { spec } from './components/registry'
 import { sizeOf } from './components/spec'
+import { ProjectStore } from './core/project'
+import { getVar, listVars, setVar } from './core/vars'
 import { initComponentBox } from './ui/componentbox'
 import { initContextMenu } from './ui/contextmenu'
 import { setNodeCount, setZoom } from './ui/hud'
@@ -38,6 +40,28 @@ const renderer = new Renderer(display, display, cam, graph, (c) => {
 })
 const input = new Input(display, cam, graph, renderer)
 
+// variaveis globais da mesa (OSC_01_ACTIVE, DEV_01_NOTE...): a
+// superficie publica de automacao - escrever aqui mexe no componente
+// e o audio reconcilia no proximo frame
+const vars = {
+  list: () => listVars(graph),
+  get: (name: string) => getVar(graph, name),
+  set: (name: string, value: number | string | boolean): boolean => {
+    const ok = setVar(graph, name, value)
+    if (ok) renderer.invalidate() // frame sujo tambem re-sincroniza o audio
+    return ok
+  },
+}
+Object.assign(window, { desk: { vars } })
+
+// projeto .synthproj: save/load + autosave (localStorage e, com
+// arquivo aberto, no proprio arquivo); atalhos cmd+s / cmd+shift+s /
+// cmd+o registrados no init
+const project = new ProjectStore(graph, cam, () => {
+  renderer.clearSelection()
+  renderer.invalidate()
+})
+
 // fonte unica do projeto: redesenha quando a lilex carregar
 document.fonts.ready.then(() => renderer.invalidate())
 
@@ -49,6 +73,16 @@ if (import.meta.env.DEV) {
 initComponentBox(input)
 initContextMenu(display, cam, graph, renderer, input)
 initToolbox([
+  {
+    icon: 'save',
+    name: 'SAVE PROJECT',
+    run: () => void project.save(),
+  },
+  {
+    icon: 'load',
+    name: 'LOAD PROJECT',
+    run: () => void project.load(),
+  },
   {
     icon: 'centralize',
     name: 'CENTRALIZE',
@@ -80,4 +114,5 @@ initToolbox([
 ])
 setZoom(cam.z)
 setNodeCount(0)
+project.init() // recupera a sessao do autosave e liga os atalhos
 void linkEngine()

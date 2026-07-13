@@ -160,7 +160,11 @@ export function buttonsOf(s: ComponentSpec): ButtonZone[] {
   const { w } = sizeOf(s)
   const out: ButtonZone[] = []
   for (const c of s.controls) {
-    if (c.kind === 'toggle' || c.kind === 'switch') {
+    if (c.kind === 'toggle' && c.label === '') {
+      // toggle SEM label (celula, ex: passo do sequencer): zona
+      // compacta so no quadrado, permite varios na mesma linha
+      out.push({ id: c.param, ctrl: c.kind, param: c.param, x: c.x - 3, y: c.y - 3, w: 16, h: 16 })
+    } else if (c.kind === 'toggle' || c.kind === 'switch') {
       out.push({ id: c.param, ctrl: c.kind, param: c.param, x: c.x - 2, y: c.y - 3, w: w - 12 - c.x + 2, h: 17 })
     } else if (c.kind === 'selector') {
       out.push({ id: c.id, ctrl: 'selector', x: c.x - 2, y: c.y - 4, w: w - 12 - c.x + 2, h: 16 })

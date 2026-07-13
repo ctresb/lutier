@@ -33,12 +33,22 @@ type Mode =
   | { m: 'route'; cable: Cable; index: number; inserted: boolean; sx: number; sy: number }
   | { m: 'marquee' }
 
+// piano no teclado do computador: linha Z-M = C4..B4, virgula = C5.
+// vale quando UM device esta selecionado (ai z/x/c... viram notas e
+// os atalhos de letra ficam em segundo plano)
+const PIANO: Record<string, number> = {
+  z: 0, s: 1, x: 2, d: 3, c: 4, v: 5, g: 6, b: 7, h: 8, n: 9, j: 10, m: 11, ',': 12,
+}
+
 // toda a interacao do desk: pan, zoom no cursor, arrastar modulo,
 // girar knob, puxar cabo, selecao e teclado
 export class Input {
   private mode: Mode = { m: 'idle' }
   private lastX = 0
   private lastY = 0
+  // teclas de piano seguradas + device que esta tocando
+  private pressed: string[] = []
+  private playing: NodeState | null = null
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -53,6 +63,32 @@ export class Input {
     canvas.addEventListener('dblclick', (e) => this.dbl(e))
     canvas.addEventListener('wheel', (e) => this.wheel(e), { passive: false })
     window.addEventListener('keydown', (e) => this.key(e))
+    window.addEventListener('keyup', (e) => this.keyUp(e))
+  }
+
+  // device selecionado sozinho e ligado = alvo do piano do teclado
+  private selectedDevice(): NodeState | null {
+    const ids = [...this.r.selectedNodes]
+    if (ids.length !== 1) return null
+    const n = this.graph.node(ids[0])
+    return n && n.type === 'device' && (n.params.on ?? 1) > 0 ? n : null
+  }
+
+  private keyUp(e: KeyboardEvent): void {
+    const i = this.pressed.indexOf(e.key.toLowerCase())
+    if (i < 0) return
+    this.pressed.splice(i, 1)
+    const dev = this.playing
+    if (!dev) return
+    if (this.pressed.length === 0) {
+      dev.params.gate = 0
+      this.playing = null
+    } else {
+      // prioridade de ultima tecla: volta pra nota ainda segurada
+      const off = PIANO[this.pressed[this.pressed.length - 1]]
+      if (off !== undefined) dev.params.note = 60 + off
+    }
+    this.r.invalidate()
   }
 
   placeAt(type: string, sx: number, sy: number): void {
@@ -486,6 +522,21 @@ export class Input {
 
   private key(e: KeyboardEvent): void {
     const mod = e.metaKey || e.ctrlKey
+    // piano: device selecionado captura as teclas de nota
+    const dev = this.selectedDevice()
+    if (dev && !mod && !e.shiftKey && !e.repeat) {
+      const off = PIANO[e.key.toLowerCase()]
+      if (off !== undefined) {
+        dev.params.note = 60 + off
+        dev.params.gate = 1
+        this.playing = dev
+        const k = e.key.toLowerCase()
+        if (!this.pressed.includes(k)) this.pressed.push(k)
+        this.r.invalidate()
+        e.preventDefault()
+        return
+      }
+    }
     if (mod && e.key === '0') {
       this.cam.reset()
       setZoom(this.cam.z)

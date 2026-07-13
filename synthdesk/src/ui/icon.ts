@@ -14,6 +14,8 @@ export type IconName =
   | 'grid-enable'
   | 'grid-disable'
   | 'centralize'
+  | 'save'
+  | 'load'
 
 export function icon(name: IconName): HTMLElement {
   const span = document.createElement('span')

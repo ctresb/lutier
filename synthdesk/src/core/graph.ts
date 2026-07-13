@@ -2,12 +2,48 @@ import { spec } from '../components/registry'
 import { buttonsOf, knobsOf, portsOf, sizeOf, slidersOf, UNIT } from '../components/spec'
 import type { Cable, Hit, NodeState, PortRef, PortSpec, Vec2 } from './types'
 
+// snapshot completo do grafo pro arquivo de projeto: nodes (posicao,
+// params, lock, nome), cabos (com waypoints) e os contadores de id
+export interface GraphData {
+  nextNode: number
+  nextCable: number
+  nodes: NodeState[]
+  cables: Cable[]
+}
+
 // grafo do patch: nodes + cabos, com hit testing em coordenadas de mundo
 export class Graph {
   nodes: NodeState[] = []
   cables: Cable[] = []
   private nextNode = 1
   private nextCable = 1
+
+  serialize(): GraphData {
+    return {
+      nextNode: this.nextNode,
+      nextCable: this.nextCable,
+      nodes: this.nodes.map((n) => ({ ...n, params: { ...n.params } })),
+      cables: this.cables.map((c) => ({
+        id: c.id,
+        from: { ...c.from },
+        to: { ...c.to },
+        pts: c.pts.map((p) => ({ ...p })),
+      })),
+    }
+  }
+
+  restore(d: GraphData): void {
+    this.nodes = d.nodes.map((n) => ({ ...n, params: { ...n.params } }))
+    this.cables = d.cables.map((c) => ({
+      id: c.id,
+      from: { ...c.from },
+      to: { ...c.to },
+      pts: (c.pts ?? []).map((p) => ({ ...p })),
+    }))
+    // contadores nunca voltam pra tras de um id existente
+    this.nextNode = Math.max(d.nextNode ?? 1, ...this.nodes.map((n) => n.id + 1), 1)
+    this.nextCable = Math.max(d.nextCable ?? 1, ...this.cables.map((c) => c.id + 1), 1)
+  }
 
   addNode(type: string, x: number, y: number): NodeState {
     const s = spec(type)

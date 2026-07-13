@@ -195,7 +195,7 @@ export function renderControl(
       break
     }
     case 'toggle':
-      toggle(g, c.x, c.y, (node.params[c.param] ?? 0) > 0, c.label)
+      toggle(g, c.x, c.y, (node.params[c.param] ?? 0) > 0, c.label === '' ? false : c.label)
       break
     case 'switch':
       switchCtl(g, c.x, c.y, (node.params[c.param] ?? 0) > 0, c.label)
