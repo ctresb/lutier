@@ -32,10 +32,12 @@ async function boot(): Promise<void> {
   ;(window as unknown as { __scene: Scene }).__scene = scene
 
   const bridge: AudioBridge = await connect((f) => scene.setFrame(f))
+  bridge.onError = (msg) => { scene.captureErr = msg }
   const syncDevice = (): void => {
     scene.deviceName = bridge.devices[bridge.current] ?? 'NO INPUT'
     scene.deviceIdx = bridge.current
     scene.deviceCount = bridge.devices.length
+    scene.captureErr = null
   }
   syncDevice()
 

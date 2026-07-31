@@ -11,6 +11,8 @@
 
 import { AudioFrame, SPEC_N, WAVE_N, GONIO_N } from './audio'
 import { WireMesh } from './glb'
+import { Text3D, Text3DStyle, RenderOpts } from './text3d'
+import { CamFx } from './cam'
 import { ph, grad, gradPaint, gradPaintSoft, STOPS } from './palette'
 
 export const W = 1920
@@ -28,25 +30,91 @@ const C = [
 ] as const
 
 type Mod = 'input' | 'wave' | 'sgram' | 'entity' | 'mesh' | 'fmap'
+  | 'fmap2' | 'text' | 'cam'
 type Mood = 'calm' | 'groove' | 'peakspec' | 'peakmesh'
-const MODS: Mod[] = ['input', 'wave', 'sgram', 'entity', 'mesh', 'fmap']
+/** cenas do diretor: cada uma e um arranjo diferente da faixa */
+type Variant = 'std' | 'text' | 'sgbg' | 'fmapleft' | 'dualfmap'
+  | 'textonly' | 'cam'
+/** combo = coreografia: seq -> MEIAUM -> MUSICA -> outline -> melt */
+type TextStyle = Text3DStyle | 'combo'
+const MODS: Mod[] = ['input', 'wave', 'sgram', 'entity', 'mesh', 'fmap',
+  'fmap2', 'text', 'cam']
 
-// layout por mood: [x0, x1] ou null (modulo some)
-const LAYOUTS: Record<Mood, Record<Mod, readonly [number, number] | null>> = {
-  groove: {
-    input: C[0], wave: C[1], sgram: C[2], entity: C[3], mesh: C[4], fmap: C[5],
-  },
-  calm: {
-    input: C[0], wave: C[1], sgram: C[2], entity: null,
-    mesh: [C[3][0], C[4][1]], fmap: C[5],
-  },
-  peakspec: {
-    input: C[0], wave: C[1], sgram: C[2], entity: null, mesh: null,
-    fmap: [C[3][0], C[5][1]],
-  },
-  peakmesh: {
-    input: C[0], wave: C[1], sgram: C[2], entity: C[3], mesh: C[4], fmap: C[5],
-  },
+/** duracao de um ciclo completo do combo (ele SEMPRE vai ate o fim) */
+const COMBO_TOTAL = 4.8 + 2.6 + 2.6 + 3.2 + 6.4
+
+const ALL_VARIANTS: Variant[] = ['std', 'text', 'sgbg', 'fmapleft',
+  'dualfmap', 'textonly', 'cam']
+const POOLS: Record<Mood, Variant[]> = {
+  calm: ['std', 'text', 'sgbg', 'cam', 'textonly'],
+  groove: ['std', 'text', 'sgbg', 'fmapleft', 'dualfmap', 'cam'],
+  peakspec: ['std', 'sgbg', 'dualfmap', 'fmapleft'],
+  peakmesh: ['std', 'text', 'sgbg', 'textonly', 'cam'],
+}
+
+// layout dinamico: mood + variante -> retangulos por modulo
+function layoutFor(
+  mood: Mood, variant: Variant,
+): Record<Mod, readonly [number, number] | null> {
+  const L: Record<Mod, readonly [number, number] | null> = {
+    input: C[0], wave: C[1], sgram: C[2],
+    entity: null, mesh: null, fmap: C[5], text: null, fmap2: null, cam: null,
+  }
+  if (variant === 'sgbg') {
+    L.sgram = null
+    if (mood === 'peakspec') {
+      L.wave = [C[1][0], C[2][1]]
+      L.fmap = [C[3][0], C[5][1]]
+    } else if (mood === 'calm') {
+      L.wave = [C[1][0], C[2][1]]
+      L.mesh = [C[3][0], C[4][1]]
+    } else {
+      L.entity = [C[2][0], C[3][1]]
+      L.mesh = C[4]
+    }
+    return L
+  }
+  if (variant === 'text' && mood !== 'peakspec') {
+    L.text = [C[3][0], C[4][1]]
+    return L
+  }
+  if (variant === 'textonly') {
+    // SO o TYPE: letras dominam a faixa inteira
+    L.wave = null
+    L.sgram = null
+    L.fmap = null
+    L.text = [C[1][0], C[5][1]]
+    return L
+  }
+  if (variant === 'fmapleft') {
+    // espectro muda de lado
+    L.wave = C[5]
+    L.fmap = [C[1][0], C[2][1]]
+    L.sgram = C[3]
+    L.mesh = C[4]
+    return L
+  }
+  if (variant === 'dualfmap') {
+    // dois espectros espelhando o palco
+    L.sgram = null
+    L.fmap = [C[2][0], C[3][1]]
+    L.fmap2 = [C[4][0], C[5][1]]
+    return L
+  }
+  if (variant === 'cam') {
+    if (mood === 'calm') {
+      L.cam = [C[3][0], C[4][1]]
+      return L
+    }
+    L.entity = C[3]
+    L.cam = C[4]
+    return L
+  }
+  // std (e variantes sem sentido no mood, que caem aqui)
+  if (mood === 'calm') L.mesh = [C[3][0], C[4][1]]
+  else if (mood === 'peakspec') L.fmap = [C[3][0], C[5][1]]
+  else { L.entity = C[3]; L.mesh = C[4] }
+  return L
 }
 
 const STATE_LABEL: Record<Mood, string> = {
@@ -91,6 +159,19 @@ export class Scene {
   private ribbon: HTMLCanvasElement
   private gonioBuf: HTMLCanvasElement
   private gonioCtx: CanvasRenderingContext2D
+  // criado so quando uma cena de texto entra (contexto webgl proprio)
+  private text3d: Text3D | null = null
+  private dofBuf: HTMLCanvasElement | null = null
+  private dofCtx: CanvasRenderingContext2D | null = null
+  private sgbgMix: HTMLCanvasElement | null = null
+  private flareScan: HTMLCanvasElement | null = null
+  private flareScanCtx: CanvasRenderingContext2D | null = null
+  private flareSpots: { x: number; y: number; b: number }[] = []
+  private flareTick = 0
+  private canvasEl: HTMLCanvasElement
+  // eco de fosforo: a cena anterior fica queimada e apaga devagar
+  private echo: HTMLCanvasElement
+  private echoCtx: CanvasRenderingContext2D
 
   private frame: AudioFrame | null = null
   private frameFresh = false
@@ -106,14 +187,36 @@ export class Scene {
   private fmapSmooth = new Float32Array(SPEC_N)
   private fmapPeaks = new Float32Array(SPEC_N)
 
-  // mood
+  // mood + diretor de cena
   private mood: Mood = 'groove'
   private moodAt = 0
-  // beat
-  private prevLowE = 0
-  private beats: number[] = []
+  private variant: Variant = 'std'
+  private variantAt = 0
+  private textStyle: TextStyle = 'marquee'
+  private sgbgA = 0
+  private sceneBag: Variant[] = []
+  private camFx: CamFx | null = null
+  private camFailed = false
+  /** debug: trava a variante (window.__scene.forceVariant = 'text') */
+  forceVariant: Variant | null = null
+  /** debug: trava o estilo do texto */
+  forceTextStyle: TextStyle | null = null
+  // beat: onset por energia de grave com limiar ADAPTATIVO (media
+  // rapida vs lenta + desvio medio), bpm por histograma de iois
+  private envFast = 0
+  private envSlow = 0
+  private envDev = 0
+  private onsetTimes: number[] = []
   private kick = 0
   private bpm = 0
+  // loudness relativo ao proprio material (percentis de 30s)
+  private loudHist = new Float32Array(1800)
+  private loudPos = 0
+  private loudLen = 0
+  private loudSorted: Float32Array | null = null
+  private sortTick = 0
+  /** erro de captura vindo do backend (mostrado no painel INPUT) */
+  captureErr: string | null = null
 
   // paineis animados
   private rects: Record<Mod, PanelRect>
@@ -144,15 +247,22 @@ export class Scene {
   constructor(canvas: HTMLCanvasElement, private dpr: number) {
     canvas.width = W * dpr
     canvas.height = H * dpr
+    this.canvasEl = canvas
     const g = canvas.getContext('2d', { alpha: false })
     if (!g) throw new Error('canvas 2d indisponivel')
     this.g = g
 
     this.rects = {} as Record<Mod, PanelRect>
+    const initial = layoutFor('groove', 'std')
     for (const m of MODS) {
-      const r = LAYOUTS.groove[m]!
-      this.rects[m] = { x0: r[0], x1: r[1], a: 1 }
+      const r = initial[m] ?? C[3]
+      this.rects[m] = { x0: r[0], x1: r[1], a: initial[m] ? 1 : 0 }
     }
+
+    this.echo = document.createElement('canvas')
+    this.echo.width = W
+    this.echo.height = H
+    this.echoCtx = this.echo.getContext('2d')!
 
     this.staticLayer = document.createElement('canvas')
     this.staticLayer.width = W * dpr
@@ -270,26 +380,23 @@ export class Scene {
     this.highS += (f.high - this.highS) * 0.08
     this.rmsS += (f.rms - this.rmsS) * 0.18
 
-    // beat: onset de grave -> kick + bpm
-    const lowE = f.low * f.rms
-    if (lowE - this.prevLowE > 0.010 &&
-      (!this.beats.length || t - this.beats[this.beats.length - 1] > 0.24)) {
-      this.beats.push(t)
-      if (this.beats.length > 12) this.beats.shift()
+    // --- onset de grave com limiar adaptativo ---
+    const e = f.low * f.rms
+    this.envFast += (e - this.envFast) * 0.55
+    this.envSlow += (e - this.envSlow) * 0.045
+    const d = this.envFast - this.envSlow
+    this.envDev += (Math.abs(d) - this.envDev) * 0.04
+    const thr = Math.max(this.envDev * 2.1, 0.0035)
+    const lastOn = this.onsetTimes.length
+      ? this.onsetTimes[this.onsetTimes.length - 1] : -9
+    if (d > thr && t - lastOn > 0.22) {
       this.kick = 1
-      const iv: number[] = []
-      for (let i = 1; i < this.beats.length; i++) {
-        const d = this.beats[i] - this.beats[i - 1]
-        if (d > 0.25 && d < 1.5) iv.push(d)
-      }
-      if (iv.length >= 3) {
-        iv.sort((a, b) => a - b)
-        this.bpm = 60 / iv[Math.floor(iv.length / 2)]
-      }
+      this.onsetTimes.push(t)
+      if (this.onsetTimes.length > 40) this.onsetTimes.shift()
+      this.updateBpm()
     }
-    this.prevLowE += (lowE - this.prevLowE) * 0.28
     this.kick = Math.max(0, this.kick - dt * 3.2)
-    if (this.beats.length && t - this.beats[this.beats.length - 1] > 3) this.bpm = 0
+    if (t - lastOn > 4) this.bpm = 0
 
     if (this.forceMood) {
       if (this.mood !== this.forceMood) {
@@ -298,8 +405,28 @@ export class Scene {
       }
       return
     }
-    const score = this.loudS * 0.55 + Math.min(this.fluxS * 3, 1) * 0.3 +
-      this.lowS * 0.15
+
+    // --- loudness RELATIVO ao proprio material (percentis 30s):
+    // musica baixa masterizada alto nao vira peak, e vice-versa ---
+    this.loudHist[this.loudPos] = loud
+    this.loudPos = (this.loudPos + 1) % this.loudHist.length
+    this.loudLen = Math.min(this.loudLen + 1, this.loudHist.length)
+    if (++this.sortTick >= 30) {
+      this.sortTick = 0
+      this.loudSorted = this.loudHist.slice(0, this.loudLen).sort()
+    }
+    let rel = loud
+    if (this.loudSorted && this.loudLen > 240) {
+      const p20 = this.loudSorted[Math.floor(this.loudLen * 0.2)]
+      const p85 = this.loudSorted[Math.floor(this.loudLen * 0.85)]
+      rel = Math.min(Math.max((loud - p20) / Math.max(p85 - p20, 0.05), 0), 1)
+    }
+    // densidade ritmica: onsets por segundo na janela de 4s
+    let recent = 0
+    for (const o of this.onsetTimes) if (t - o < 4) recent++
+    const dens = Math.min(recent / 4 / 2.6, 1)
+    const score = rel * 0.5 + dens * 0.28 + Math.min(this.fluxS * 3, 1) * 0.22
+
     const dwell = t - this.moodAt
     const isPeak = this.mood === 'peakspec' || this.mood === 'peakmesh'
     let next: Mood = this.mood
@@ -308,20 +435,125 @@ export class Scene {
         // variante do pico: grave dominando = espectro gigante,
         // agudo dominando = mesh incandescente
         next = this.lowS > this.highS * 1.2 ? 'peakspec' : 'peakmesh'
-      } else if (score < 0.28 && this.mood !== 'calm') {
+      } else if (score < 0.26 && this.mood !== 'calm') {
         next = 'calm'
-      } else if (score >= 0.34 && score <= 0.56 && this.mood !== 'groove') {
+      } else if (score >= 0.33 && score <= 0.56 && this.mood !== 'groove') {
         next = 'groove'
       }
     }
-    if (next !== this.mood) {
+    // muda de estado NO beat (corte musical); sem beat, espera mais.
+    // combo em andamento SEGURA a troca (ele vai ate o fim)
+    const onBeat = t - lastOn < 0.13
+    if (next !== this.mood && (onBeat || !this.bpm || dwell > 10) &&
+      !this.comboBusy(t)) {
       this.mood = next
       this.moodAt = t
+      // mantem a cena se o novo mood tambem a suporta; senao std
+      if (!POOLS[next].includes(this.variant)) {
+        this.variant = 'std'
+        this.variantAt = t
+      }
     }
   }
 
+  /** bpm por histograma de intervalos entre onsets, dobrados pra
+      faixa 70..180 (meio-tempo e dobro caem no mesmo pico) */
+  private updateBpm(): void {
+    const on = this.onsetTimes
+    if (on.length < 5) return
+    const hist = new Float32Array(56)
+    const n = on.length
+    for (let i = Math.max(1, n - 16); i < n; i++) {
+      const ioi = on[i] - on[i - 1]
+      if (ioi < 0.18 || ioi > 2.2) continue
+      let bpm = 60 / ioi
+      while (bpm < 70) bpm *= 2
+      while (bpm > 180) bpm /= 2
+      const w = 0.4 + 0.6 * (1 - (n - i) / 16)
+      const bin = Math.round((bpm - 70) / 2)
+      if (bin >= 0 && bin < 56) {
+        hist[bin] += w
+        if (bin > 0) hist[bin - 1] += w * 0.45
+        if (bin < 55) hist[bin + 1] += w * 0.45
+      }
+    }
+    let best = 0
+    let bi = -1
+    for (let i = 0; i < 56; i++) {
+      if (hist[i] > best) { best = hist[i]; bi = i }
+    }
+    if (bi < 0 || best < 1.2) return
+    const cand = 70 + bi * 2
+    this.bpm = this.bpm > 0 ? this.bpm + (cand - this.bpm) * 0.25 : cand
+  }
+
+  /** combo em andamento e ainda longe de fechar o ciclo? */
+  private comboBusy(t: number): boolean {
+    if (this.variant !== 'text' && this.variant !== 'textonly') return false
+    if (this.textStyle !== 'combo') return false
+    const pos = (t - this.variantAt) % COMBO_TOTAL
+    return pos < COMBO_TOTAL - 0.6
+  }
+
+  /** diretor: troca de cena com COOLDOWN longo e distribuicao
+      uniforme (sacola embaralhada, sem viciar em uma cena) */
+  private updateDirector(t: number): void {
+    if (this.forceVariant) {
+      if (this.variant !== this.forceVariant) {
+        this.variant = this.forceVariant
+        this.variantAt = t
+        this.pickTextStyle()
+      }
+      return
+    }
+    const varDwell = t - this.variantAt
+    // cooldown: nada muda antes de ~26-40s de cena
+    const hold = 26 + (Math.sin(this.variantAt * 7.31) * 0.5 + 0.5) * 14
+    if (varDwell < hold || t - this.moodAt < 8) return
+    // combo nunca e cortado no meio
+    if (this.comboBusy(t)) return
+
+    const pool = POOLS[this.mood].filter(
+      (v) => !(v === 'cam' && this.camFailed))
+    let next: Variant | null = null
+    for (let tries = 0; tries < ALL_VARIANTS.length + 2; tries++) {
+      if (!this.sceneBag.length) {
+        // reenche e embaralha a sacola: todo mundo aparece antes
+        // de alguem repetir
+        this.sceneBag = ALL_VARIANTS.slice()
+        for (let i = this.sceneBag.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1))
+          ;[this.sceneBag[i], this.sceneBag[j]] =
+            [this.sceneBag[j], this.sceneBag[i]]
+        }
+      }
+      const cand = this.sceneBag.pop()!
+      if (pool.includes(cand) && cand !== this.variant) {
+        next = cand
+        break
+      }
+    }
+    if (!next) next = pool.find((v) => v !== this.variant) ?? 'std'
+    this.variant = next
+    this.variantAt = t
+    this.pickTextStyle()
+  }
+
+  private pickTextStyle(): void {
+    if (this.forceTextStyle) {
+      this.textStyle = this.forceTextStyle
+      return
+    }
+    const pool: TextStyle[] = this.mood === 'calm'
+      ? ['stack', 'outline', 'seq', 'combo']
+      : this.mood === 'peakmesh'
+        ? ['3d', 'marquee', 'combo']
+        : ['marquee', 'seq', 'stack', 'combo', 'combo']
+    this.textStyle = pool[Math.floor(Math.random() * pool.length)]
+  }
+
   private updateRects(): void {
-    const target = LAYOUTS[this.mood]
+    const target = layoutFor(this.mood, this.variant)
     for (const m of MODS) {
       const r = this.rects[m]
       const tr = target[m]
@@ -398,6 +630,9 @@ export class Scene {
     g.fillText('STATUS:', 560, 25)
     g.fillStyle = ph(240)
     g.fillText(STATE_LABEL[this.mood], 616, 25)
+    g.font = '9px Lilex, monospace'
+    g.fillStyle = ph(120)
+    g.fillText(`SCN/${this.variant.toUpperCase()}`, 704, 24)
     g.fillStyle = ph(160)
     g.fillText('BPM:', 1580, 25)
     g.fillStyle = ph(240)
@@ -458,9 +693,16 @@ export class Scene {
       g.fillStyle = ph(200)
       g.fillRect(bx + 1, y - 7, 108 * fracs[i], 6)
     }
-    g.fillStyle = ph(105)
     g.font = '8px Lilex, monospace'
-    g.fillText('CLICK: NEXT INPUT // RCLICK: PREV', x + 10, 183)
+    if (this.captureErr) {
+      g.fillStyle = ph(235)
+      let msg = `ERR: ${this.captureErr.toUpperCase()}`
+      while (msg.length > 4 && g.measureText(msg).width > 228) msg = msg.slice(0, -1)
+      g.fillText(msg, x + 10, 183)
+    } else {
+      g.fillStyle = ph(105)
+      g.fillText('CLICK: NEXT INPUT // RCLICK: PREV', x + 10, 183)
+    }
   }
 
   private drawWave(g: CanvasRenderingContext2D, r: PanelRect, f: AudioFrame): void {
@@ -468,9 +710,13 @@ export class Scene {
     const x0 = r.x0 + 10
     const x1 = r.x1 - 10
     const my = (PY0 + PY1) / 2 + 14
-    // no pico a onda cresce e clareia
+    // no pico a onda cresce e clareia, mas NUNCA sai do painel
+    g.save()
+    g.beginPath()
+    g.rect(r.x0 + 4, PY0 + 26, r.x1 - r.x0 - 8, PY1 - PY0 - 32)
+    g.clip()
     const boost = 1 + this.kick * 0.5 + (this.mood.startsWith('peak') ? 0.35 : 0)
-    const amp = (PY1 - 66) * 0.46 * boost
+    const amp = Math.min((PY1 - 66) * 0.46 * boost, (PY1 - PY0 - 36) / 2)
     g.strokeStyle = ph(55)
     g.beginPath()
     g.moveTo(x0, my + 0.5)
@@ -486,6 +732,7 @@ export class Scene {
       else g.lineTo(x0 + k, y)
     }
     g.stroke()
+    g.restore()
     g.font = '10px Lilex, monospace'
     g.fillStyle = ph(200)
     g.fillText(`Δ ${f.rms.toFixed(4)}`, r.x1 - 78, PY0 + 16)
@@ -493,27 +740,38 @@ export class Scene {
 
   private drawSgram(g: CanvasRenderingContext2D, r: PanelRect, f: AudioFrame): void {
     this.panel(g, r, 'SPECTROGRAM')
+    const h = this.sgram.height
+    // o espectrograma respira: o grave estufa a altura de leve
+    const dw = r.x1 - r.x0 - 16
+    const dh = h * (1 + f.low * 0.08 + this.kick * 0.04)
+    g.save()
+    g.beginPath()
+    g.rect(r.x0 + 8, 66, dw, h)
+    g.clip()
+    g.drawImage(this.sgram, r.x0 + 8, 66 + (h - dh) / 2, dw, dh)
+    g.restore()
+    g.fillStyle = ph(140)
+    g.fillRect(r.x0 + 8 + dw - 1, 66, 1, h)
+  }
+
+  /** avanca o buffer do espectrograma mesmo sem painel (bg mode) */
+  private stepSgram(f: AudioFrame): void {
     const sc = this.sgramCtx
     const w = this.sgram.width
     const h = this.sgram.height
-    if (this.frameFresh) {
-      sc.drawImage(this.sgram, -1, 0)
-      const col = this.sgramCol
-      for (let y = 0; y < h; y++) {
-        const bin = Math.floor((1 - y / (h - 1)) * (SPEC_N - 1))
-        const v = f.spec[bin]
-        const i = y * 4
-        col.data[i] = this.sgramLut[v * 3]
-        col.data[i + 1] = this.sgramLut[v * 3 + 1]
-        col.data[i + 2] = this.sgramLut[v * 3 + 2]
-        col.data[i + 3] = 255
-      }
-      sc.putImageData(col, w - 1, 0)
+    if (!this.frameFresh) return
+    sc.drawImage(this.sgram, -1, 0)
+    const col = this.sgramCol
+    for (let y = 0; y < h; y++) {
+      const bin = Math.floor((1 - y / (h - 1)) * (SPEC_N - 1))
+      const v = f.spec[bin]
+      const i = y * 4
+      col.data[i] = this.sgramLut[v * 3]
+      col.data[i + 1] = this.sgramLut[v * 3 + 1]
+      col.data[i + 2] = this.sgramLut[v * 3 + 2]
+      col.data[i + 3] = 255
     }
-    const dw = r.x1 - r.x0 - 16
-    g.drawImage(this.sgram, r.x0 + 8, 66, dw, h)
-    g.fillStyle = ph(140)
-    g.fillRect(r.x0 + 8 + dw - 1, 66, 1, h)
+    sc.putImageData(col, w - 1, 0)
   }
 
   private spawnParticles(r: PanelRect, f: AudioFrame, dt: number): void {
@@ -828,17 +1086,9 @@ export class Scene {
     void f
   }
 
-  private drawFmap(g: CanvasRenderingContext2D, r: PanelRect, f: AudioFrame,
-    dt: number): void {
-    const wide = r.x1 - r.x0 > 600
-    this.panel(g, r, wide ? 'FREQUENCY MAP // FULL' : 'FREQUENCY MAP')
-    const x0 = r.x0 + 10
-    const x1 = r.x1 - (wide ? 20 : 96)
-    const y0 = 66
-    const y1 = PY1 - 16
-    const wpx = x1 - x0
-
-    // espectro suavizado (chill alisa mais) + peak hold
+  /** suavizacao + peak hold do espectro: UMA vez por frame (o painel
+      pode ser desenhado duas vezes na cena dualfmap) */
+  private updateFmapState(f: AudioFrame, dt: number): void {
     const k = this.mood === 'calm' ? 0.12 : 0.4
     for (let i = 0; i < SPEC_N; i++) {
       const v = f.spec[i] / 255
@@ -846,6 +1096,16 @@ export class Scene {
       if (v > this.fmapPeaks[i]) this.fmapPeaks[i] = v
       else this.fmapPeaks[i] = Math.max(0, this.fmapPeaks[i] - dt * 0.24)
     }
+  }
+
+  private drawFmap(g: CanvasRenderingContext2D, r: PanelRect, f: AudioFrame): void {
+    const wide = r.x1 - r.x0 > 600
+    this.panel(g, r, wide ? 'FREQUENCY MAP // FULL' : 'FREQUENCY MAP')
+    const x0 = r.x0 + 10
+    const x1 = r.x1 - (wide ? 20 : 96)
+    const y0 = 66
+    const y1 = PY1 - 16
+    const wpx = x1 - x0
 
     if (wide) {
       // modo largo: barras verticais com fade de opacidade (100% na
@@ -931,26 +1191,314 @@ export class Scene {
 
     const f = this.frame ?? emptyFrame()
     this.updateMood(f, t, dt)
+    this.updateDirector(t)
     this.updateRects()
+    this.stepSgram(f)
+
+    // fundo: espectrograma tomando a faixa inteira (cena sgbg)
+    this.sgbgA += ((this.variant === 'sgbg' ? 0.55 : 0) - this.sgbgA) * 0.06
+    if (this.sgbgA > 0.02) {
+      g.globalAlpha = this.sgbgA
+      g.drawImage(this.sgram, FRAME.x0 + 2, HEADER_Y + 2,
+        FRAME.x1 - FRAME.x0 - 4, FRAME.y1 - HEADER_Y - 4)
+      g.globalAlpha = 1
+    }
+
+    // eco de fosforo da cena anterior (rastro que apaga devagar)
+    g.globalCompositeOperation = 'lighter'
+    g.globalAlpha = 0.32
+    g.drawImage(this.echo, 0, 0, W, H)
+    g.globalAlpha = 1
+    g.globalCompositeOperation = 'source-over'
 
     this.drawHeader(g, f, t)
 
+    this.updateFmapState(f, dt)
+    const dim = Math.min(this.sgbgA * 1.35, 0.78)
     const draw: Record<Mod, () => void> = {
       input: () => this.drawInput(g, this.rects.input, f),
       wave: () => this.drawWave(g, this.rects.wave, f),
       sgram: () => this.drawSgram(g, this.rects.sgram, f),
       entity: () => this.drawEntity(g, this.rects.entity, f, t, dt),
       mesh: () => this.drawMesh(g, this.rects.mesh, f, t, dt),
-      fmap: () => this.drawFmap(g, this.rects.fmap, f, dt),
+      fmap: () => this.drawFmap(g, this.rects.fmap, f),
+      fmap2: () => this.drawFmap(g, this.rects.fmap2, f),
+      text: () => this.drawText(g, this.rects.text, f, t),
+      cam: () => this.drawCam(g, this.rects.cam),
     }
     for (const m of MODS) {
       const r = this.rects[m]
       if (r.a < 0.03) continue
+      // com o espectrograma de fundo, cada painel escurece o proprio
+      // retangulo pro conteudo branco estourar em contraste
+      if (dim > 0.03) {
+        g.globalAlpha = Math.min(r.a, 1) * dim
+        g.fillStyle = '#000'
+        g.fillRect(r.x0 + 1, PY0 + 1, r.x1 - r.x0 - 2, PY1 - PY0 - 2)
+      }
       g.globalAlpha = Math.min(r.a, 1)
       draw[m]()
       g.globalAlpha = 1
+      // com o fundo colorido, TODO o resto fica branco: desatura o
+      // conteudo do painel (hierarquia continua por brilho)
+      if (dim > 0.03) {
+        g.globalCompositeOperation = 'saturation'
+        g.globalAlpha = Math.min(r.a, 1) * Math.min(this.sgbgA * 1.9, 1)
+        g.fillStyle = '#000'
+        g.fillRect(r.x0 + 1, PY0 + 1, r.x1 - r.x0 - 2, PY1 - PY0 - 2)
+        g.globalCompositeOperation = 'source-over'
+        g.globalAlpha = 1
+      }
+    }
+    // mistura final do fundo: multiply do espectrograma (com piso
+    // clareado, senao as partes escuras engolem o conteudo)
+    if (this.sgbgA > 0.02) {
+      if (!this.sgbgMix) {
+        this.sgbgMix = document.createElement('canvas')
+        this.sgbgMix.width = this.sgram.width
+        this.sgbgMix.height = this.sgram.height
+      }
+      const mc = this.sgbgMix.getContext('2d')!
+      mc.globalCompositeOperation = 'source-over'
+      mc.drawImage(this.sgram, 0, 0)
+      mc.globalCompositeOperation = 'lighten'
+      mc.fillStyle = 'rgb(132,132,138)'
+      mc.fillRect(0, 0, this.sgbgMix.width, this.sgbgMix.height)
+      mc.globalCompositeOperation = 'source-over'
+      g.globalCompositeOperation = 'multiply'
+      g.globalAlpha = Math.min(this.sgbgA * 1.55, 0.85)
+      g.drawImage(this.sgbgMix, FRAME.x0 + 2, HEADER_Y + 2,
+        FRAME.x1 - FRAME.x0 - 4, FRAME.y1 - HEADER_Y - 4)
+      g.globalAlpha = 1
+      g.globalCompositeOperation = 'source-over'
     }
     this.frameFresh = false
+
+    // captura o frame pro eco do proximo (decai a cada passo)
+    const ec = this.echoCtx
+    ec.globalCompositeOperation = 'destination-out'
+    ec.fillStyle = 'rgba(0,0,0,0.16)'
+    ec.fillRect(0, 0, W, H)
+    ec.globalCompositeOperation = 'source-over'
+    ec.globalAlpha = 0.32
+    ec.drawImage(this.canvasEl, 0, 0, W, H)
+    ec.globalAlpha = 1
+  }
+
+  // ---------- letras MEIAUM MUSICA ----------
+
+  private drawText(g: CanvasRenderingContext2D, r: PanelRect, f: AudioFrame,
+    t: number): void {
+    this.panel(g, r, `TYPE // ${this.textStyle.toUpperCase()} 3D`)
+    if (!this.text3d) {
+      try { this.text3d = new Text3D() } catch { /* sem webgl */ }
+    }
+    if (!this.text3d) return
+    g.save()
+    g.beginPath()
+    g.rect(r.x0 + 4, PY0 + 26, r.x1 - r.x0 - 8, PY1 - PY0 - 32)
+    g.clip()
+
+    const vt = t - this.variantAt
+    // unica reatividade: escala individual por letra (banda propria)
+    const bandScale = (i: number) => {
+      const bin = Math.floor((i / 12) * SPEC_N * 0.72)
+      return 1 + this.fmapSmooth[bin] * 0.14
+    }
+    const bw = r.x1 - r.x0 - 12
+    const bh = PY1 - PY0 - 34
+    const dx = r.x0 + 6
+    const dy = PY0 + 28
+
+    let style: Text3DStyle
+    let svt = vt
+    const opts: RenderOpts = { bandScale }
+    if (this.textStyle === 'combo') {
+      // coreografia em loop: letra por letra -> MEIAUM -> MUSICA ->
+      // outline empilhado -> melt (outline, cada letra expande e
+      // contrai no proprio lugar, uma de cada vez, frase sempre la)
+      const durs = [4.8, 2.6, 2.6, 3.2, 6.4]
+      let ct = vt % (4.8 + 2.6 + 2.6 + 3.2 + 6.4)
+      let phase = 0
+      while (phase < durs.length - 1 && ct >= durs[phase]) {
+        ct -= durs[phase]
+        phase++
+      }
+      if (phase === 0) { style = 'seq'; svt = ct }
+      else if (phase === 1) { style = '3d'; opts.focus = [0, 5] }
+      else if (phase === 2) { style = '3d'; opts.focus = [7, 12] }
+      else if (phase === 3) { style = 'outline' }
+      else {
+        style = '3d'
+        opts.wire = true
+        const wavePos = (ct / durs[4]) * 15 - 1
+        opts.fx = (i) => {
+          const dcur = wavePos - i
+          if (dcur < 0 || dcur > 1.6) return {}
+          const p = Math.sin((dcur / 1.6) * Math.PI)
+          return { sx: 1 + p * 0.6, sy: 1 - p * 0.14, dy: -p * 6 }
+        }
+      }
+    } else {
+      style = this.textStyle
+    }
+    const c = this.text3d.render(t, svt, style, bw, bh, this.dpr, opts)
+    g.drawImage(c, dx, dy, bw, bh)
+    this.dofPass(g, c, dx, dy, bw, bh)
+    this.scanFlares(c)
+    this.drawFlare(g, dx, dy, bw, bh, t)
+    g.restore()
+    void f
+  }
+
+  /** camera ao vivo: so os contornos, pixelado, com aberracao
+      cromatica suave. a permissao e pedida quando a cena entra */
+  private drawCam(g: CanvasRenderingContext2D, r: PanelRect): void {
+    this.panel(g, r, 'CAMERA // EDGE')
+    if (!this.camFx) this.camFx = new CamFx()
+    this.camFx.start()
+    if (this.camFx.state === 'fail') {
+      this.camFailed = true
+      g.font = '10px Lilex, monospace'
+      g.fillStyle = ph(105)
+      g.fillText('NO CAMERA SIGNAL', r.x0 + 10, (PY0 + PY1) / 2)
+      return
+    }
+    if (this.camFx.state !== 'ok') {
+      g.font = '10px Lilex, monospace'
+      g.fillStyle = ph(105)
+      g.fillText('CAM: WAITING...', r.x0 + 10, (PY0 + PY1) / 2)
+      return
+    }
+    g.save()
+    g.beginPath()
+    g.rect(r.x0 + 4, PY0 + 26, r.x1 - r.x0 - 8, PY1 - PY0 - 32)
+    g.clip()
+    this.camFx.draw(g, r.x0 + 8, 66, r.x1 - r.x0 - 16, PY1 - 8 - 66)
+    g.restore()
+    g.font = '8px Lilex, monospace'
+    g.fillStyle = ph(105)
+    g.fillText('SOBEL // RGB SPLIT', r.x0 + 10, 183)
+  }
+
+  /** dof isometrico (tilt-shift): as bordas laterais desfocam, o
+      centro fica nitido. blit do proprio render com blur + mascara */
+  private dofPass(g: CanvasRenderingContext2D, src: HTMLCanvasElement,
+    dx: number, dy: number, bw: number, bh: number): void {
+    if (!this.dofBuf) {
+      this.dofBuf = document.createElement('canvas')
+      this.dofCtx = this.dofBuf.getContext('2d')!
+    }
+    const d = this.dofBuf
+    if (d.width !== src.width || d.height !== src.height) {
+      d.width = src.width
+      d.height = src.height
+    }
+    const dc = this.dofCtx!
+    dc.clearRect(0, 0, d.width, d.height)
+    dc.filter = 'blur(5px)'
+    dc.drawImage(src, 0, 0)
+    dc.filter = 'none'
+    dc.globalCompositeOperation = 'destination-in'
+    const mask = dc.createLinearGradient(0, 0, d.width, 0)
+    mask.addColorStop(0, 'rgba(0,0,0,0.95)')
+    mask.addColorStop(0.3, 'rgba(0,0,0,0)')
+    mask.addColorStop(0.7, 'rgba(0,0,0,0)')
+    mask.addColorStop(1, 'rgba(0,0,0,0.95)')
+    dc.fillStyle = mask
+    dc.fillRect(0, 0, d.width, d.height)
+    dc.globalCompositeOperation = 'source-over'
+    g.drawImage(d, dx, dy, bw, bh)
+  }
+
+  /** acha os highlights REAIS do render 3d (quinas do cromo): scan
+      barato num downsample, a cada 6 frames, com suavizacao */
+  private scanFlares(src: HTMLCanvasElement): void {
+    if (++this.flareTick % 6) return
+    const SW = 96
+    const SH = 24
+    if (!this.flareScan) {
+      this.flareScan = document.createElement('canvas')
+      this.flareScan.width = SW
+      this.flareScan.height = SH
+      this.flareScanCtx = this.flareScan.getContext('2d', {
+        willReadFrequently: true,
+      })!
+    }
+    const sc = this.flareScanCtx!
+    sc.clearRect(0, 0, SW, SH)
+    sc.drawImage(src, 0, 0, SW, SH)
+    const d = sc.getImageData(0, 0, SW, SH).data
+    const cands: { x: number; y: number; b: number }[] = []
+    for (let y = 1; y < SH - 1; y++) {
+      for (let x = 1; x < SW - 1; x++) {
+        const i = (y * SW + x) * 4
+        if (d[i + 3] < 200) continue
+        const lum = Math.max(d[i], d[i + 1], d[i + 2])
+        if (lum > 236) cands.push({ x, y, b: lum })
+      }
+    }
+    cands.sort((a, b) => b.b - a.b)
+    // no maximo 2 flares, bem separados (quinas distintas)
+    const picks: { x: number; y: number; b: number }[] = []
+    for (const c of cands) {
+      if (picks.length >= 2) break
+      if (picks.every((p) => Math.hypot(p.x - c.x, p.y - c.y) > 22)) {
+        picks.push(c)
+      }
+    }
+    const next: { x: number; y: number; b: number }[] = []
+    for (const p of picks) {
+      const nx = p.x / SW
+      const ny = p.y / SH
+      // gruda no flare anterior mais proximo (posicao nao pula)
+      const old = this.flareSpots.find(
+        (o) => Math.hypot(o.x - nx, o.y - ny) < 0.12)
+      next.push(old
+        ? { x: old.x + (nx - old.x) * 0.4, y: old.y + (ny - old.y) * 0.4, b: p.b }
+        : { x: nx, y: ny, b: p.b })
+    }
+    this.flareSpots = next
+  }
+
+  /** flare discreto de quina: cruz de difracao fina + nucleo, nas
+      posicoes dos highlights reais do cromo */
+  private drawFlare(g: CanvasRenderingContext2D, dx: number, dy: number,
+    bw: number, bh: number, t: number): void {
+    if (!this.flareSpots.length) return
+    g.globalCompositeOperation = 'lighter'
+    let i = 0
+    for (const s of this.flareSpots) {
+      const fx = dx + s.x * bw
+      const fy = dy + s.y * bh
+      const inten = Math.min((s.b - 232) / 23, 1) *
+        (0.72 + 0.28 * Math.sin(t * 2.1 + i * 2.7))
+      if (inten <= 0.05) { i++; continue }
+      const len = 26 + inten * 40
+      // braco horizontal (anamorfico, fino)
+      const hg = g.createLinearGradient(fx - len, fy, fx + len, fy)
+      hg.addColorStop(0, 'rgba(210,230,250,0)')
+      hg.addColorStop(0.5, `rgba(245,250,255,${0.5 * inten})`)
+      hg.addColorStop(1, 'rgba(210,230,250,0)')
+      g.fillStyle = hg
+      g.fillRect(fx - len, fy - 0.6, len * 2, 1.2)
+      // braco vertical curto
+      const vlen = 7 + inten * 8
+      const vg = g.createLinearGradient(fx, fy - vlen, fx, fy + vlen)
+      vg.addColorStop(0, 'rgba(210,230,250,0)')
+      vg.addColorStop(0.5, `rgba(245,250,255,${0.4 * inten})`)
+      vg.addColorStop(1, 'rgba(210,230,250,0)')
+      g.fillStyle = vg
+      g.fillRect(fx - 0.6, fy - vlen, 1.2, vlen * 2)
+      // nucleo pequeno
+      const core = g.createRadialGradient(fx, fy, 0, fx, fy, 5)
+      core.addColorStop(0, `rgba(255,255,255,${0.55 * inten})`)
+      core.addColorStop(1, 'rgba(255,255,255,0)')
+      g.fillStyle = core
+      g.fillRect(fx - 5, fy - 5, 10, 10)
+      i++
+    }
+    g.globalCompositeOperation = 'source-over'
   }
 
   /** painel de input em coords de cena (pro hit test do clique) */

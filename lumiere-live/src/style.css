@@ -69,9 +69,33 @@ html, body {
   inset: -120px;
   pointer-events: none;
   z-index: 42;
-  opacity: 0.09;
+  opacity: 0.12;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
   animation: grain-jump 0.9s steps(3) infinite;
+}
+
+/* segunda camada de grain, mais grossa e lenta (textura de fosforo) */
+#grain2 {
+  position: absolute;
+  inset: -120px;
+  pointer-events: none;
+  z-index: 42;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='320' height='320' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain-jump 1.7s steps(2) infinite reverse;
+}
+
+/* flicker de tubo: quase imperceptivel, so vida */
+#scene {
+  animation: tube-flicker 0.6s steps(4) infinite;
+}
+
+@keyframes tube-flicker {
+  0% { opacity: 1; }
+  25% { opacity: 0.988; }
+  50% { opacity: 1; }
+  75% { opacity: 0.993; }
+  100% { opacity: 1; }
 }
 
 @keyframes grain-jump {
@@ -82,5 +106,6 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #grain { animation: none; }
+  #grain, #grain2 { animation: none; }
+  #scene { animation: none; }
 }

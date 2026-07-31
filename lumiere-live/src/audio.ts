@@ -57,6 +57,7 @@ export interface AudioBridge {
   devices: string[]
   current: number
   onFrame: (f: AudioFrame) => void
+  onError?: (msg: string) => void
   cycle(dir: number): Promise<void>
 }
 
@@ -85,6 +86,7 @@ export async function connect(onFrame: (f: AudioFrame) => void): Promise<AudioBr
     })
     await listen<string>('af_err', (e) => {
       console.error('captura caiu:', e.payload)
+      bridge.onError?.(e.payload)
     })
     try {
       bridge.devices = await invoke<string[]>('list_inputs')
@@ -101,58 +103,12 @@ export async function connect(onFrame: (f: AudioFrame) => void): Promise<AudioBr
 
 function mockBridge(onFrame: (f: AudioFrame) => void): AudioBridge {
   const bridge: AudioBridge = {
-    devices: ['MOCK OSCILLATOR', 'MOCK NOISE'],
+    devices: ['MOCK MUSIC ENGINE'],
     current: 0,
     onFrame,
-    async cycle(dir: number) {
-      this.current = (this.current + dir + this.devices.length) % this.devices.length
-    },
+    async cycle() { /* um device so */ },
   }
-  const spec = new Uint8Array(SPEC_N)
-  const wave = new Int8Array(WAVE_N)
-  const gonio = new Int8Array(GONIO_N * 2)
-  let t = 0
-  setInterval(() => {
-    t += 1 / 60
-    // "musica" mock com dinamica: ciclo lento chill -> groove -> peak
-    const inten = 0.5 + 0.5 * Math.sin(t * (Math.PI * 2) / 36 - Math.PI / 2)
-    const beat = Math.max(0, Math.sin(t * Math.PI * 2 * 1.05)) ** 8 * (0.3 + inten)
-    const sweep = (Math.sin(t * 0.31) * 0.5 + 0.5) * SPEC_N
-    for (let i = 0; i < SPEC_N; i++) {
-      const bass = i < 26 ? beat * 230 * (1 - i / 26) : 0
-      const tone = 210 * Math.exp(-((i - sweep) ** 2) / 90)
-      const tone2 = 150 * Math.exp(-((i - sweep * 0.62 - 30) ** 2) / 40)
-      const noise = Math.random() * 26 + 12
-      spec[i] = Math.min(255, bass + tone + tone2 + noise) | 0
-    }
-    const f0 = 55 * 2 ** (sweep / 36)
-    for (let i = 0; i < WAVE_N; i++) {
-      const ph0 = (t * 60 + i / WAVE_N) * f0 * 0.11
-      const v = Math.sin(ph0 * Math.PI * 2) * (0.25 + beat * 0.6)
-        + (Math.random() - 0.5) * 0.1
-      wave[i] = Math.max(-127, Math.min(127, v * 110)) | 0
-    }
-    for (let i = 0; i < GONIO_N; i++) {
-      const a = t * 3 + i * 0.13
-      const r = (0.2 + beat * 0.65) * (0.4 + 0.6 * Math.abs(Math.sin(i * 0.71)))
-      gonio[i * 2] = Math.max(-127, Math.min(127,
-        (Math.sin(a) * r * 0.5 + (Math.random() - 0.5) * 0.24) * 127)) | 0
-      gonio[i * 2 + 1] = Math.max(-127, Math.min(127,
-        (Math.cos(a * 1.31) * r + (Math.random() - 0.5) * 0.2) * 127)) | 0
-    }
-    onFrame({
-      spec, wave, gonio,
-      rms: 0.004 + inten * 0.18 + beat * 0.2,
-      peak: 0.05 + inten * 0.3 + beat * 0.6,
-      centroid: 300 + (sweep / SPEC_N) * 4200,
-      flux: 0.02 + inten * 0.14 + beat * 0.4 + Math.random() * 0.04,
-      crest: 3 + beat * 5,
-      width: 0.22 + Math.sin(t * 0.7) * 0.14 + beat * 0.2,
-      low: beat * 0.9 + inten * 0.2,
-      mid: 0.2 + inten * 0.3 + (sweep / SPEC_N) * 0.3,
-      high: 0.05 + inten * 0.2 + Math.random() * 0.1 + beat * 0.2,
-      sr: 48000,
-    })
-  }, 1000 / 60)
+  // musica sintetizada de verdade + analise identica ao backend
+  void import('./mockmusic').then((m) => m.startMockMusic(onFrame))
   return bridge
 }

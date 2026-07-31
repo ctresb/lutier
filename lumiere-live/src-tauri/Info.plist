@@ -4,5 +4,7 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>lumiere-live analisa o audio do input escolhido pra desenhar o visualizador.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>lumiere-live usa a camera no modulo de contornos (CAMERA // EDGE) do visualizador.</string>
 </dict>
 </plist>
