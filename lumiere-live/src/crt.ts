@@ -48,10 +48,14 @@ void main() {
   // aberracao cromatica so no halo (equivale a ~2px da cena cheia)
   vec2 off = vec2(uTexel.x * 0.5, 0.0);
   vec3 glow = vec3(halo(vUv - off).r, halo(vUv).g, halo(vUv + off).b);
+  // curva de fosforo: o halo cresce com o quadrado da luminancia,
+  // entao os brancos estouram e os tracos fracos quase nao brilham
+  float lum = dot(glow, vec3(0.299, 0.587, 0.114));
+  vec3 shaped = glow * (0.3 + 2.1 * lum * lum);
   // em HDR o nucleo do halo estoura acima do branco SDR (fosforo
   // quente de verdade); em SDR uBoost = 0 e o resultado clampa
   vec3 hot = glow * glow * glow * uBoost;
-  o = vec4(glow * uGain + hot, 1.0);
+  o = vec4(shaped * uGain + hot, 1.0);
 }`
 
 const SCALE = 4 // glow roda a 1/SCALE da resolucao da cena
@@ -147,7 +151,7 @@ export class CrtFx {
   }
 
   private applyRange(): void {
-    this.gl.uniform1f(this.uGain, this.hdr ? 0.75 : 0.55)
+    this.gl.uniform1f(this.uGain, this.hdr ? 0.95 : 0.75)
     this.gl.uniform1f(this.uBoost, this.hdr ? 1.6 : 0.0)
   }
 

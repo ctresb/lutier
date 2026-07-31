@@ -114,7 +114,9 @@ function mockBridge(onFrame: (f: AudioFrame) => void): AudioBridge {
   let t = 0
   setInterval(() => {
     t += 1 / 60
-    const beat = Math.max(0, Math.sin(t * Math.PI * 2 * 1.05)) ** 8
+    // "musica" mock com dinamica: ciclo lento chill -> groove -> peak
+    const inten = 0.5 + 0.5 * Math.sin(t * (Math.PI * 2) / 36 - Math.PI / 2)
+    const beat = Math.max(0, Math.sin(t * Math.PI * 2 * 1.05)) ** 8 * (0.3 + inten)
     const sweep = (Math.sin(t * 0.31) * 0.5 + 0.5) * SPEC_N
     for (let i = 0; i < SPEC_N; i++) {
       const bass = i < 26 ? beat * 230 * (1 - i / 26) : 0
@@ -140,15 +142,15 @@ function mockBridge(onFrame: (f: AudioFrame) => void): AudioBridge {
     }
     onFrame({
       spec, wave, gonio,
-      rms: 0.06 + beat * 0.2,
-      peak: 0.2 + beat * 0.6,
+      rms: 0.004 + inten * 0.18 + beat * 0.2,
+      peak: 0.05 + inten * 0.3 + beat * 0.6,
       centroid: 300 + (sweep / SPEC_N) * 4200,
-      flux: 0.04 + beat * 0.5 + Math.random() * 0.04,
+      flux: 0.02 + inten * 0.14 + beat * 0.4 + Math.random() * 0.04,
       crest: 3 + beat * 5,
       width: 0.22 + Math.sin(t * 0.7) * 0.14 + beat * 0.2,
-      low: beat * 0.9,
-      mid: 0.3 + (sweep / SPEC_N) * 0.4,
-      high: 0.1 + Math.random() * 0.14 + beat * 0.2,
+      low: beat * 0.9 + inten * 0.2,
+      mid: 0.2 + inten * 0.3 + (sweep / SPEC_N) * 0.3,
+      high: 0.05 + inten * 0.2 + Math.random() * 0.1 + beat * 0.2,
       sr: 48000,
     })
   }, 1000 / 60)

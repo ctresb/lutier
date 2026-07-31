@@ -29,6 +29,8 @@ async function boot(): Promise<void> {
     .then((b) => { scene.mesh = parseGlb(b) })
     .catch(() => { /* sem mesh o painel avisa LOADING */ })
 
+  ;(window as unknown as { __scene: Scene }).__scene = scene
+
   const bridge: AudioBridge = await connect((f) => scene.setFrame(f))
   const syncDevice = (): void => {
     scene.deviceName = bridge.devices[bridge.current] ?? 'NO INPUT'

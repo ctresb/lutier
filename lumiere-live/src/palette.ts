@@ -41,6 +41,21 @@ export function gradPaint(
   return p
 }
 
+/** gradiente pastel: cores puxadas pro branco de fosforo (suave,
+    pra areas onde a cor crua fica dura demais, ex goniometro) */
+export function gradPaintSoft(
+  g: CanvasRenderingContext2D, x0: number, x1: number, mix = 0.45,
+): CanvasGradient {
+  const p = g.createLinearGradient(x0, 0, x1, 0)
+  RGB.forEach((c, i) => {
+    const r = (c[0] + (214 - c[0]) * mix) | 0
+    const gg = (c[1] + (228 - c[1]) * mix) | 0
+    const b = (c[2] + (238 - c[2]) * mix) | 0
+    p.addColorStop(i / (RGB.length - 1), `rgb(${r},${gg},${b})`)
+  })
+  return p
+}
+
 /** fosforo frio do lumiere: brilho v (0..255) com o tint da lei
     visual (r = v*0.94, g = v*0.97, b = v*1.01 + 6) */
 export function ph(v: number, alpha = 1): string {
