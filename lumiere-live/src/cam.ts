@@ -2,8 +2,9 @@
 // (sobel) numa grade pixelada bem grossa e desenha linha fina com
 // aberracao cromatica suave (3 passes rgb deslocados em 'lighter').
 
-const GW = 152
-const GH = 60
+// grade mais densa = linha mais FINA na tela (pedido do dono)
+const GW = 216
+const GH = 86
 
 export class CamFx {
   state: 'idle' | 'starting' | 'ok' | 'fail' = 'idle'

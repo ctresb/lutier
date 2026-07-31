@@ -55,6 +55,9 @@ async function boot(): Promise<void> {
     if (scene.inputPanelHit(x, y)) bridge.cycle(-1).then(syncDevice)
   })
 
+  // permissao da camera ja no launch (a cena CAM entra sem espera)
+  setTimeout(() => scene.warmupCam(), 2500)
+
   const loop = (now: number): void => {
     scene.render(now)
     crt?.present(sceneCanvas)

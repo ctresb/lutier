@@ -363,7 +363,7 @@ export class Scene {
     g.font = '12px Lilex, monospace'
     g.fillStyle = ph(200)
     try { (g as unknown as { letterSpacing: string }).letterSpacing = '3px' } catch { /* opcional */ }
-    const title = 'LUMIERE :: LIVE SIGNAL MONITOR'
+    const title = 'MEIAUM MUSICA :: FEAT C3B :: VISUALS BY C3B'
     g.fillText(title, W / 2 - g.measureText(title).width / 2, 25)
     try { (g as unknown as { letterSpacing: string }).letterSpacing = '0px' } catch { /* opcional */ }
   }
@@ -1082,7 +1082,7 @@ export class Scene {
     const ne2 = m.edges.length / 2
     g.fillText(mode === 'points' ? `VTX ${n}` : `VTX ${n} EDG ${ne2}`,
       r.x1 - 118, 183)
-    g.fillText('/SUBJECT_MESH.GLB', r.x0 + 10, 183)
+    g.fillText('/MEIAUMZINHO_MESH.GLB', r.x0 + 10, 183)
     void f
   }
 
@@ -1351,8 +1351,15 @@ export class Scene {
     void f
   }
 
+  /** pre-aquece a camera no boot: a permissao aparece ja no launch
+      em vez de so quando a cena CAM for sorteada pelo diretor */
+  warmupCam(): void {
+    if (!this.camFx) this.camFx = new CamFx()
+    this.camFx.start()
+  }
+
   /** camera ao vivo: so os contornos, pixelado, com aberracao
-      cromatica suave. a permissao e pedida quando a cena entra */
+      cromatica suave */
   private drawCam(g: CanvasRenderingContext2D, r: PanelRect): void {
     this.panel(g, r, 'CAMERA // EDGE')
     if (!this.camFx) this.camFx = new CamFx()
