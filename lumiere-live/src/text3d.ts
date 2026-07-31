@@ -197,9 +197,13 @@ export class Text3D {
       if (mesh.material !== mat) mesh.material = mat
       const s = opts.bandScale ? opts.bandScale(l.index) : 1
       const fx = opts.fx ? opts.fx(l.index) : undefined
+      // sal: bob e sway organicos por letra (onda percorrendo a
+      // frase, movimento proprio, nao e reacao ao som)
+      const bob = Math.sin(t * 0.55 + l.index * 0.45) * 2.6
+      const sway = Math.sin(t * 0.21 + l.index * 0.33) * 0.05
       l.holder.scale.set(s * (fx?.sx ?? 1), s * (fx?.sy ?? 1), s)
-      l.holder.position.y = l.y0 + (fx?.dy ?? 0)
-      l.holder.rotation.set(rx, ry, 0)
+      l.holder.position.y = l.y0 + (fx?.dy ?? 0) + bob
+      l.holder.rotation.set(rx, ry + sway, 0)
       l.holder.visible = fx?.vis ?? true
     }
 

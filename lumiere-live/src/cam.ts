@@ -2,9 +2,9 @@
 // (sobel) numa grade pixelada bem grossa e desenha linha fina com
 // aberracao cromatica suave (3 passes rgb deslocados em 'lighter').
 
-// grade mais densa = linha mais FINA na tela (pedido do dono)
-const GW = 216
-const GH = 86
+// grade mais densa = linha mais FINA na tela (pedido do dono, 2x)
+const GW = 288
+const GH = 110
 
 export class CamFx {
   state: 'idle' | 'starting' | 'ok' | 'fail' = 'idle'
@@ -75,7 +75,7 @@ export class CamFx {
         const gy = -lum[i - GW - 1] - 2 * lum[i - GW] - lum[i - GW + 1]
           + lum[i + GW - 1] + 2 * lum[i + GW] + lum[i + GW + 1]
         const mag = Math.abs(gx) + Math.abs(gy)
-        if (mag > 96) {
+        if (mag > 130) {
           const o = i * 4
           const v = Math.min(255, 120 + mag * 0.35)
           out[o] = v

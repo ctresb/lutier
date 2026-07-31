@@ -32,9 +32,12 @@ const C = [
 type Mod = 'input' | 'wave' | 'sgram' | 'entity' | 'mesh' | 'fmap'
   | 'fmap2' | 'text' | 'cam'
 type Mood = 'calm' | 'groove' | 'peakspec' | 'peakmesh'
-/** cenas do diretor: cada uma e um arranjo diferente da faixa */
-type Variant = 'std' | 'text' | 'sgbg' | 'fmapleft' | 'dualfmap'
-  | 'textonly' | 'cam'
+/** cenas do diretor: cada uma e um arranjo diferente da faixa.
+    IMPORTANTE: layout muda SO aqui (com cooldown + sacola); o mood
+    tempera apenas os MODOS internos dos modulos (cloud/wire/hot,
+    linha/barras...), nunca o arranjo - senao vicia num layout */
+type Variant = 'std' | 'meshwide' | 'text' | 'textonly' | 'typoduo'
+  | 'sgbg' | 'fmapleft' | 'fmapfull' | 'dualfmap' | 'sgramwide' | 'cam'
 /** combo = coreografia: seq -> MEIAUM -> MUSICA -> outline -> melt */
 type TextStyle = Text3DStyle | 'combo'
 const MODS: Mod[] = ['input', 'wave', 'sgram', 'entity', 'mesh', 'fmap',
@@ -43,78 +46,74 @@ const MODS: Mod[] = ['input', 'wave', 'sgram', 'entity', 'mesh', 'fmap',
 /** duracao de um ciclo completo do combo (ele SEMPRE vai ate o fim) */
 const COMBO_TOTAL = 4.8 + 2.6 + 2.6 + 3.2 + 6.4
 
-const ALL_VARIANTS: Variant[] = ['std', 'text', 'sgbg', 'fmapleft',
-  'dualfmap', 'textonly', 'cam']
-const POOLS: Record<Mood, Variant[]> = {
-  calm: ['std', 'text', 'sgbg', 'cam', 'textonly'],
-  groove: ['std', 'text', 'sgbg', 'fmapleft', 'dualfmap', 'cam'],
-  peakspec: ['std', 'sgbg', 'dualfmap', 'fmapleft'],
-  peakmesh: ['std', 'text', 'sgbg', 'textonly', 'cam'],
-}
+const ALL_VARIANTS: Variant[] = ['std', 'meshwide', 'text', 'textonly',
+  'typoduo', 'sgbg', 'fmapleft', 'fmapfull', 'dualfmap', 'sgramwide', 'cam']
 
-// layout dinamico: mood + variante -> retangulos por modulo
-function layoutFor(
-  mood: Mood, variant: Variant,
-): Record<Mod, readonly [number, number] | null> {
+// layout dinamico por cena (mood NAO entra aqui)
+function layoutFor(variant: Variant): Record<Mod, readonly [number, number] | null> {
   const L: Record<Mod, readonly [number, number] | null> = {
     input: C[0], wave: C[1], sgram: C[2],
     entity: null, mesh: null, fmap: C[5], text: null, fmap2: null, cam: null,
   }
-  if (variant === 'sgbg') {
-    L.sgram = null
-    if (mood === 'peakspec') {
-      L.wave = [C[1][0], C[2][1]]
-      L.fmap = [C[3][0], C[5][1]]
-    } else if (mood === 'calm') {
-      L.wave = [C[1][0], C[2][1]]
+  switch (variant) {
+    case 'meshwide':
+      // o 3d ocupa o miolo (cloud no chill, hot no pico)
       L.mesh = [C[3][0], C[4][1]]
-    } else {
+      return L
+    case 'text':
+      L.text = [C[3][0], C[4][1]]
+      return L
+    case 'textonly':
+      // SO o TYPE: letras dominam a faixa inteira
+      L.wave = null
+      L.sgram = null
+      L.fmap = null
+      L.text = [C[1][0], C[5][1]]
+      return L
+    case 'typoduo':
+      // espectro nos dois lados, typo reinando no meio
+      L.wave = null
+      L.sgram = null
+      L.fmap = [C[1][0], C[2][1]]
+      L.text = [C[3][0], C[4][1]]
+      L.fmap2 = C[5]
+      return L
+    case 'sgbg':
+      // espectrograma vira o fundo da faixa inteira
+      L.sgram = null
       L.entity = [C[2][0], C[3][1]]
       L.mesh = C[4]
-    }
-    return L
-  }
-  if (variant === 'text' && mood !== 'peakspec') {
-    L.text = [C[3][0], C[4][1]]
-    return L
-  }
-  if (variant === 'textonly') {
-    // SO o TYPE: letras dominam a faixa inteira
-    L.wave = null
-    L.sgram = null
-    L.fmap = null
-    L.text = [C[1][0], C[5][1]]
-    return L
-  }
-  if (variant === 'fmapleft') {
-    // espectro muda de lado
-    L.wave = C[5]
-    L.fmap = [C[1][0], C[2][1]]
-    L.sgram = C[3]
-    L.mesh = C[4]
-    return L
-  }
-  if (variant === 'dualfmap') {
-    // dois espectros espelhando o palco
-    L.sgram = null
-    L.fmap = [C[2][0], C[3][1]]
-    L.fmap2 = [C[4][0], C[5][1]]
-    return L
-  }
-  if (variant === 'cam') {
-    if (mood === 'calm') {
+      return L
+    case 'fmapleft':
+      // espectro muda de lado
+      L.wave = C[5]
+      L.fmap = [C[1][0], C[2][1]]
+      L.sgram = C[3]
+      L.mesh = C[4]
+      return L
+    case 'fmapfull':
+      // espectro gigante em 3 slots
+      L.wave = [C[1][0], C[2][1]]
+      L.fmap = [C[3][0], C[5][1]]
+      return L
+    case 'dualfmap':
+      // dois espectros espelhando o palco
+      L.sgram = null
+      L.fmap = [C[2][0], C[3][1]]
+      L.fmap2 = [C[4][0], C[5][1]]
+      return L
+    case 'sgramwide':
+      // o proprio espectrograma vira o palco central
+      L.sgram = [C[2][0], C[4][1]]
+      return L
+    case 'cam':
       L.cam = [C[3][0], C[4][1]]
       return L
-    }
-    L.entity = C[3]
-    L.cam = C[4]
-    return L
+    default:
+      L.entity = C[3]
+      L.mesh = C[4]
+      return L
   }
-  // std (e variantes sem sentido no mood, que caem aqui)
-  if (mood === 'calm') L.mesh = [C[3][0], C[4][1]]
-  else if (mood === 'peakspec') L.fmap = [C[3][0], C[5][1]]
-  else { L.entity = C[3]; L.mesh = C[4] }
-  return L
 }
 
 const STATE_LABEL: Record<Mood, string> = {
@@ -253,7 +252,7 @@ export class Scene {
     this.g = g
 
     this.rects = {} as Record<Mod, PanelRect>
-    const initial = layoutFor('groove', 'std')
+    const initial = layoutFor('std')
     for (const m of MODS) {
       const r = initial[m] ?? C[3]
       this.rects[m] = { x0: r[0], x1: r[1], a: initial[m] ? 1 : 0 }
@@ -441,18 +440,12 @@ export class Scene {
         next = 'groove'
       }
     }
-    // muda de estado NO beat (corte musical); sem beat, espera mais.
-    // combo em andamento SEGURA a troca (ele vai ate o fim)
+    // muda de estado NO beat (corte musical). mood NAO mexe no
+    // layout: so os modos internos dos modulos mudam (suave)
     const onBeat = t - lastOn < 0.13
-    if (next !== this.mood && (onBeat || !this.bpm || dwell > 10) &&
-      !this.comboBusy(t)) {
+    if (next !== this.mood && (onBeat || !this.bpm || dwell > 10)) {
       this.mood = next
       this.moodAt = t
-      // mantem a cena se o novo mood tambem a suporta; senao std
-      if (!POOLS[next].includes(this.variant)) {
-        this.variant = 'std'
-        this.variantAt = t
-      }
     }
   }
 
@@ -509,31 +502,27 @@ export class Scene {
     const varDwell = t - this.variantAt
     // cooldown: nada muda antes de ~26-40s de cena
     const hold = 26 + (Math.sin(this.variantAt * 7.31) * 0.5 + 0.5) * 14
-    if (varDwell < hold || t - this.moodAt < 8) return
+    if (varDwell < hold) return
     // combo nunca e cortado no meio
     if (this.comboBusy(t)) return
 
-    const pool = POOLS[this.mood].filter(
-      (v) => !(v === 'cam' && this.camFailed))
-    let next: Variant | null = null
-    for (let tries = 0; tries < ALL_VARIANTS.length + 2; tries++) {
-      if (!this.sceneBag.length) {
-        // reenche e embaralha a sacola: todo mundo aparece antes
-        // de alguem repetir
-        this.sceneBag = ALL_VARIANTS.slice()
-        for (let i = this.sceneBag.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1))
-          ;[this.sceneBag[i], this.sceneBag[j]] =
-            [this.sceneBag[j], this.sceneBag[i]]
-        }
-      }
-      const cand = this.sceneBag.pop()!
-      if (pool.includes(cand) && cand !== this.variant) {
-        next = cand
-        break
+    // sacola embaralhada SEM descarte: pega o primeiro candidato
+    // valido e tira SO ele - cena nenhuma e pulada, todas aparecem
+    // uma vez por rodada da sacola
+    if (!this.sceneBag.length) {
+      this.sceneBag = ALL_VARIANTS.slice()
+      for (let i = this.sceneBag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[this.sceneBag[i], this.sceneBag[j]] =
+          [this.sceneBag[j], this.sceneBag[i]]
       }
     }
-    if (!next) next = pool.find((v) => v !== this.variant) ?? 'std'
+    const ok = (v: Variant) =>
+      v !== this.variant && !(v === 'cam' && this.camFailed)
+    const idx = this.sceneBag.findIndex(ok)
+    let next: Variant
+    if (idx >= 0) next = this.sceneBag.splice(idx, 1)[0]
+    else next = ALL_VARIANTS.find(ok) ?? 'std'
     this.variant = next
     this.variantAt = t
     this.pickTextStyle()
@@ -553,7 +542,7 @@ export class Scene {
   }
 
   private updateRects(): void {
-    const target = layoutFor(this.mood, this.variant)
+    const target = layoutFor(this.variant)
     for (const m of MODS) {
       const r = this.rects[m]
       const tr = target[m]
@@ -627,12 +616,12 @@ export class Scene {
     }
     g.font = '11px Lilex, monospace'
     g.fillStyle = ph(160)
-    g.fillText('STATUS:', 560, 25)
+    g.fillText('STATUS:', 452, 25)
     g.fillStyle = ph(240)
-    g.fillText(STATE_LABEL[this.mood], 616, 25)
+    g.fillText(STATE_LABEL[this.mood], 508, 25)
     g.font = '9px Lilex, monospace'
     g.fillStyle = ph(120)
-    g.fillText(`SCN/${this.variant.toUpperCase()}`, 704, 24)
+    g.fillText(`SCN/${this.variant.toUpperCase()}`, 596, 24)
     g.fillStyle = ph(160)
     g.fillText('BPM:', 1580, 25)
     g.fillStyle = ph(240)
@@ -1107,10 +1096,11 @@ export class Scene {
     const y1 = PY1 - 16
     const wpx = x1 - x0
 
-    if (wide) {
-      // modo largo: barras verticais com fade de opacidade (100% na
-      // base -> 0% no topo) + peak-hold caindo (so aqui, regra do dono)
-      const nb = 96
+    // barras no modo largo OU quando a musica ta pocando; peak-hold
+    // caindo so no largo (regra do dono)
+    const bars = wide || this.mood === 'peakspec' || this.mood === 'peakmesh'
+    if (bars) {
+      const nb = wide ? 96 : 44
       const bw = wpx / nb
       for (let b = 0; b < nb; b++) {
         let v = 0
@@ -1129,9 +1119,11 @@ export class Scene {
         ramp.addColorStop(1, `rgba(${cr | 0},${cg | 0},${cb | 0},0)`)
         g.fillStyle = ramp
         g.fillRect(bx, y1 - bh, bw - 1.5, bh)
-        // tampa de peak-hold
-        g.fillStyle = ph(235)
-        g.fillRect(bx, y1 - pk * (y1 - y0) - 2, bw - 1.5, 1.2)
+        if (wide) {
+          // tampa de peak-hold (so no largo)
+          g.fillStyle = ph(235)
+          g.fillRect(bx, y1 - pk * (y1 - y0) - 2, bw - 1.5, 1.2)
+        }
       }
     } else {
       // modo estreito: SO a linha (sem peak-hold, sem barra)
@@ -1289,7 +1281,9 @@ export class Scene {
 
   private drawText(g: CanvasRenderingContext2D, r: PanelRect, f: AudioFrame,
     t: number): void {
-    this.panel(g, r, `TYPE // ${this.textStyle.toUpperCase()} 3D`)
+    this.panel(g, r, this.textStyle === '3d'
+      ? 'TYPE // 3D'
+      : `TYPE // ${this.textStyle.toUpperCase()} 3D`)
     if (!this.text3d) {
       try { this.text3d = new Text3D() } catch { /* sem webgl */ }
     }
