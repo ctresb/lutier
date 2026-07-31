@@ -69,7 +69,12 @@ export class CamFx {
     const scale = Math.max(gw / vw, GH / vh)
     const sw = gw / scale
     const sh = GH / scale
+    // espelhado (como espelho mesmo, pedido do dono)
+    g.save()
+    g.translate(gw, 0)
+    g.scale(-1, 1)
     g.drawImage(this.video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, gw, GH)
+    g.restore()
     const d = g.getImageData(0, 0, gw, GH).data
     const lum = this.lum
     for (let i = 0; i < gw * GH; i++) {
