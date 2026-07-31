@@ -162,7 +162,6 @@ export class Scene {
   private text3d: Text3D | null = null
   private dofBuf: HTMLCanvasElement | null = null
   private dofCtx: CanvasRenderingContext2D | null = null
-  private sgbgMix: HTMLCanvasElement | null = null
   private flareScan: HTMLCanvasElement | null = null
   private flareScanCtx: CanvasRenderingContext2D | null = null
   private flareSpots: { x: number; y: number; b: number }[] = []
@@ -1206,7 +1205,7 @@ export class Scene {
     this.drawHeader(g, f, t)
 
     this.updateFmapState(f, dt)
-    const dim = Math.min(this.sgbgA * 1.35, 0.78)
+    const dim = Math.min(this.sgbgA * 0.9, 0.5)
     const draw: Record<Mod, () => void> = {
       input: () => this.drawInput(g, this.rects.input, f),
       wave: () => this.drawWave(g, this.rects.wave, f),
@@ -1242,24 +1241,13 @@ export class Scene {
         g.globalAlpha = 1
       }
     }
-    // mistura final do fundo: multiply do espectrograma (com piso
-    // clareado, senao as partes escuras engolem o conteudo)
+    // mistura final do fundo: 'lighten' do espectrograma por cima de
+    // tudo. branco fica BRANCO (max preserva), o preto dos paineis
+    // ganha o espectrograma e os tons medios se misturam
     if (this.sgbgA > 0.02) {
-      if (!this.sgbgMix) {
-        this.sgbgMix = document.createElement('canvas')
-        this.sgbgMix.width = this.sgram.width
-        this.sgbgMix.height = this.sgram.height
-      }
-      const mc = this.sgbgMix.getContext('2d')!
-      mc.globalCompositeOperation = 'source-over'
-      mc.drawImage(this.sgram, 0, 0)
-      mc.globalCompositeOperation = 'lighten'
-      mc.fillStyle = 'rgb(132,132,138)'
-      mc.fillRect(0, 0, this.sgbgMix.width, this.sgbgMix.height)
-      mc.globalCompositeOperation = 'source-over'
-      g.globalCompositeOperation = 'multiply'
-      g.globalAlpha = Math.min(this.sgbgA * 1.55, 0.85)
-      g.drawImage(this.sgbgMix, FRAME.x0 + 2, HEADER_Y + 2,
+      g.globalCompositeOperation = 'lighten'
+      g.globalAlpha = Math.min(this.sgbgA * 1.3, 0.75)
+      g.drawImage(this.sgram, FRAME.x0 + 2, HEADER_Y + 2,
         FRAME.x1 - FRAME.x0 - 4, FRAME.y1 - HEADER_Y - 4)
       g.globalAlpha = 1
       g.globalCompositeOperation = 'source-over'
